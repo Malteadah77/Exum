@@ -2,6 +2,20 @@
 
 **Exum** es un reproductor de música para Windows inspirado en el clásico **Winamp 2.x**, construido desde cero con **Electron + TypeScript + Web Audio API** siguiendo una arquitectura modular por capas.
 
+## Instalación rápida (Windows)
+
+No necesitas instalar nada ni configurar Node.js: **Exum** viene como ejecutable portable.
+
+1. Entra a la sección **[Releases](https://github.com/Malteadah77/Exum/releases/latest)** y descarga **`Exum-1.0.0-portable.exe`**.
+2. Haz **doble clic** en `Exum-1.0.0-portable.exe` para abrirlo.
+   - *Nota de Windows SmartScreen:* como es un proyecto personal sin firma comercial de pago, la primera vez Windows puede mostrar *"Windows protegió su PC"*. Haz clic en **Más información → Ejecutar de todas formas**.
+3. **Primeros pasos dentro de Exum:**
+   - **Cargar tu música:** haz clic en **`ADD` → `📁 Elegir carpeta`** (o arrastra tus archivos `.mp3` / `.flac` / `.wav` directamente encima de la ventana).
+   - **Cambiar skin estilo Winamp:** presiona **`SKINS`** abajo a la derecha para buscar y descargar skins del *Webamp Skin Museum* en 1 clic (o arrastra cualquier archivo `.wsz` sobre la ventana).
+   - **Letras y Radios:** usa **`LRC`** para letras sincronizadas y **`NET`** para radios mundiales, YouTube o Spotify.
+
+---
+
 ## Características principales
 
 - **Motor propio de Skins `.wsz` + Webamp Skin Museum:**
