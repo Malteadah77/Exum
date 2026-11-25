@@ -1,0 +1,60 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta
+    http-equiv="Content-Security-Policy"
+    content="default-src 'self'; img-src 'self' data: https://r2.webampskins.org https://*.webampskins.org; style-src 'self' 'unsafe-inline';"
+  />
+  <title>Exum — Skins .wsz</title>
+  <link rel="stylesheet" href="./styles/floating.css" />
+</head>
+<body>
+  <div class="float-shell">
+    <header class="float-titlebar">
+      <span class="float-title">🏛️ EXUM — GESTOR Y MUSEO DE SKINS (.WSZ)</span>
+      <div class="float-actions">
+        <button id="btn-pin" class="float-btn" title="Mantener siempre visible">📌</button>
+        <button id="btn-min" class="float-btn" title="Minimizar">_</button>
+        <button id="btn-close" class="float-btn float-btn-close" title="Cerrar">×</button>
+      </div>
+    </header>
+
+    <main class="float-body">
+      <!-- Colección local guardada (con opción de aplicar y borrar) -->
+      <section class="section-block">
+        <div class="section-bar">
+          <span class="section-title">MIS SKINS GUARDADAS</span>
+          <div class="float-actions">
+            <button id="btn-import" class="float-btn">📂 Importar .wsz</button>
+            <button id="btn-reset-skin" class="float-btn" title="Volver al estilo base oscuro">↺ Base</button>
+          </div>
+        </div>
+        <div id="saved-skins-list" class="saved-skins-list"></div>
+      </section>
+
+      <!-- Buscador Online Webamp Skin Museum -->
+      <section class="section-block grow">
+        <div class="section-bar">
+          <span class="section-title">WEBAMP SKIN MUSEUM (ONLINE)</span>
+        </div>
+        <div class="search-row">
+          <input
+            id="museum-search-input"
+            class="float-input"
+            type="text"
+            placeholder="Buscar skin (ej: lain, anime, cyberpunk, matrix)..."
+          />
+          <button id="btn-museum-search" class="float-btn">Buscar</button>
+        </div>
+        <div id="museum-grid" class="museum-grid">
+          <div class="lyrics-message">Cargando skins del museo...</div>
+        </div>
+      </section>
+    </main>
+  </div>
+
+  <script type="module" src="./dist/renderer/skinsWindow.js"></script>
+</body>
+</html>

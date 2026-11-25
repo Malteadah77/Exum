@@ -2,7 +2,7 @@ import type { VisualizerMode } from '../shared/types.js';
 
 /**
  * Visualizador de espectro estilo Winamp usando <canvas> + AnalyserNode + requestAnimationFrame.
- * Lee automáticamente las variables CSS de la skin activa (--accent, --text-muted).
+ * Soporta colores automáticos de la skin CSS (--accent) o paleta exacta de viscolor.txt (.wsz).
  */
 export class AudioVisualizer {
   private canvas: HTMLCanvasElement;
@@ -10,20 +10,25 @@ export class AudioVisualizer {
   private analyser: AnalyserNode | null = null;
   private mode: VisualizerMode = 'bars';
   private animationId: number | null = null;
+  private customPalette: string[] | null = null;
 
-  // Picos flotantes que caen lentamente por gravedad (detalle clásico de Winamp)
-  private readonly barCount = 24;
+  private readonly barCount: number;
   private peaks: number[] = [];
 
-  constructor(canvas: HTMLCanvasElement) {
+  constructor(canvas: HTMLCanvasElement, barCount = 24) {
     this.canvas = canvas;
     const context = canvas.getContext('2d');
     if (!context) {
       throw new Error('No se pudo inicializar el contexto 2D del visualizador.');
     }
     this.ctx = context;
+    this.barCount = barCount;
     this.peaks = new Array(this.barCount).fill(0);
     this.drawIdleFrame();
+  }
+
+  public setCustomPalette(colors: string[] | null): void {
+    this.customPalette = colors && colors.length >= 18 ? colors : null;
   }
 
   public attachAnalyser(analyser: AnalyserNode): void {
@@ -72,11 +77,23 @@ export class AudioVisualizer {
     }
   }
 
-  private getThemeColors(): { accent: string; muted: string } {
+  private getThemeColors(): { accent: string; muted: string; peak: string } {
+    if (this.customPalette) {
+      return {
+        accent: this.customPalette[10] ?? this.customPalette[2] ?? '#00ff66',
+        muted: this.customPalette[1] ?? '#555555',
+        peak: this.customPalette[23] ?? '#ffffff',
+      };
+    }
+
     const styles = getComputedStyle(document.documentElement);
     return {
-      accent: styles.getPropertyValue('--accent').trim() || '#00ff66',
-      muted: styles.getPropertyValue('--text-muted').trim() || '#7a869a',
+      accent:
+        styles.getPropertyValue('--wsz-pl-normal').trim() ||
+        styles.getPropertyValue('--accent').trim() ||
+        '#c93b52',
+      muted: styles.getPropertyValue('--wsz-pl-sel').trim() || '#5a1423',
+      peak: styles.getPropertyValue('--wsz-pl-current').trim() || '#fce7eb',
     };
   }
 
@@ -85,12 +102,11 @@ export class AudioVisualizer {
     const { muted } = this.getThemeColors();
     this.ctx.clearRect(0, 0, width, height);
 
-    // Línea base sutil en reposo
     this.ctx.strokeStyle = muted;
     this.ctx.globalAlpha = 0.35;
     this.ctx.beginPath();
-    this.ctx.moveTo(0, height - 3);
-    this.ctx.lineTo(width, height - 3);
+    this.ctx.moveTo(0, height - 2);
+    this.ctx.lineTo(width, height - 2);
     this.ctx.stroke();
     this.ctx.globalAlpha = 1;
   }
@@ -100,7 +116,7 @@ export class AudioVisualizer {
     const { muted } = this.getThemeColors();
     this.ctx.clearRect(0, 0, width, height);
     this.ctx.fillStyle = muted;
-    this.ctx.font = '10px Consolas, monospace';
+    this.ctx.font = '9px Consolas, monospace';
     this.ctx.textAlign = 'center';
     this.ctx.textBaseline = 'middle';
     this.ctx.fillText('VIS OFF', width / 2, height / 2);
@@ -109,7 +125,7 @@ export class AudioVisualizer {
   private renderFrame(): void {
     if (!this.analyser) return;
     const { width, height } = this.canvas;
-    const { accent } = this.getThemeColors();
+    const { accent, peak } = this.getThemeColors();
 
     this.ctx.clearRect(0, 0, width, height);
 
@@ -117,11 +133,20 @@ export class AudioVisualizer {
       const freqData = new Uint8Array(this.analyser.frequencyBinCount);
       this.analyser.getByteFrequencyData(freqData);
 
-      const gap = 2;
-      const barWidth = (width - gap * (this.barCount - 1)) / this.barCount;
-      // Usamos el primer 70% del espectro donde vive casi toda la energía musical
+      const gap = width < 100 ? 1 : 2;
+      const barWidth = Math.max(1, (width - gap * (this.barCount - 1)) / this.barCount);
       const usableBins = Math.floor(freqData.length * 0.7);
       const step = Math.max(1, Math.floor(usableBins / this.barCount));
+
+      // Si tenemos viscolor.txt, creamos el gradiente vertical clásico (líneas 2..17)
+      let fillStyle: string | CanvasGradient = accent;
+      if (this.customPalette && this.customPalette.length >= 18) {
+        const grad = this.ctx.createLinearGradient(0, 0, 0, height);
+        grad.addColorStop(0, this.customPalette[2]);
+        grad.addColorStop(0.5, this.customPalette[9]);
+        grad.addColorStop(1, this.customPalette[17]);
+        fillStyle = grad;
+      }
 
       for (let i = 0; i < this.barCount; i++) {
         let sum = 0;
@@ -129,46 +154,41 @@ export class AudioVisualizer {
           sum += freqData[i * step + j] ?? 0;
         }
         const avg = sum / step;
-        const barHeight = (avg / 255) * (height - 4);
+        const barHeight = (avg / 255) * (height - 2);
         const x = i * (barWidth + gap);
         const y = height - barHeight;
 
-        // Barra principal
-        this.ctx.fillStyle = accent;
-        this.ctx.globalAlpha = 0.85;
+        this.ctx.fillStyle = fillStyle;
+        this.ctx.globalAlpha = 0.92;
         this.ctx.fillRect(x, y, barWidth, barHeight);
         this.ctx.globalAlpha = 1;
 
-        // Pico flotante con gravedad suave
         if (barHeight > this.peaks[i]) {
           this.peaks[i] = barHeight;
         } else {
-          this.peaks[i] = Math.max(0, this.peaks[i] - 0.7);
+          this.peaks[i] = Math.max(0, this.peaks[i] - 0.55);
         }
 
         if (this.peaks[i] > 1) {
-          this.ctx.fillStyle = '#ffffff';
-          this.ctx.fillRect(x, height - this.peaks[i] - 2, barWidth, 2);
+          this.ctx.fillStyle = peak;
+          this.ctx.fillRect(x, Math.max(0, height - this.peaks[i] - 1), barWidth, 1.5);
         }
       }
     } else if (this.mode === 'wave') {
       const timeData = new Uint8Array(this.analyser.fftSize);
       this.analyser.getByteTimeDomainData(timeData);
 
-      this.ctx.lineWidth = 1.8;
-      this.ctx.strokeStyle = accent;
+      this.ctx.lineWidth = 1.5;
+      this.ctx.strokeStyle = this.customPalette?.[18] ?? accent;
       this.ctx.beginPath();
 
       const sliceWidth = width / timeData.length;
       let x = 0;
       for (let i = 0; i < timeData.length; i++) {
-        const normalized = timeData[i] / 128.0; // 1.0 = silencio (centro)
+        const normalized = timeData[i] / 128.0;
         const y = (normalized * height) / 2;
-        if (i === 0) {
-          this.ctx.moveTo(x, y);
-        } else {
-          this.ctx.lineTo(x, y);
-        }
+        if (i === 0) this.ctx.moveTo(x, y);
+        else this.ctx.lineTo(x, y);
         x += sliceWidth;
       }
 

@@ -35,11 +35,15 @@ export class AudioEngine {
 
   // Nodos de Web Audio API (se crean la primera vez que se reproduce audio)
   private audioCtx: AudioContext | null = null;
+  private preampNode: GainNode | null = null;
+  private pannerNode: StereoPannerNode | null = null;
   private filters: BiquadFilterNode[] = [];
   private analyser: AnalyserNode | null = null;
 
-  // Estado lógico del ecualizador (se conserva incluso si el EQ está apagado)
+  // Estado lógico del ecualizador y balance
   private eqEnabled = true;
+  private preampDb = 0;
+  private balance = 0; // -1 (izquierda) a +1 (derecha)
   private eqGains: number[] = EQ_BANDS.map(() => 0);
 
   constructor(callbacks: AudioEngineCallbacks = {}) {
@@ -79,6 +83,10 @@ export class AudioEngine {
     const ctx = new AudioContext();
     const source = ctx.createMediaElementSource(this.audio);
 
+    // Preamp (ganancia global del EQ en dB)
+    const preamp = ctx.createGain();
+    preamp.gain.value = this.eqEnabled ? Math.pow(10, this.preampDb / 20) : 1;
+
     // Creamos los 10 filtros de frecuencia en serie
     this.filters = EQ_BANDS.map((band, index) => {
       const filter = ctx.createBiquadFilter();
@@ -95,25 +103,36 @@ export class AudioEngine {
       return filter;
     });
 
+    // Balance estéreo (Izquierda <-> Derecha)
+    const panner = ctx.createStereoPanner();
+    panner.pan.value = this.balance;
+
     const analyser = ctx.createAnalyser();
     analyser.fftSize = 256;
     analyser.smoothingTimeConstant = 0.8;
 
-    // Encadenamos: source -> filter[0] -> ... -> filter[9] -> analyser -> speakers
-    let currentNode: AudioNode = source;
+    // Cadena: source -> preamp -> filter[0..9] -> panner -> analyser -> speakers
+    source.connect(preamp);
+    let currentNode: AudioNode = preamp;
     for (const filter of this.filters) {
       currentNode.connect(filter);
       currentNode = filter;
     }
-    currentNode.connect(analyser);
+    currentNode.connect(panner);
+    panner.connect(analyser);
     analyser.connect(ctx.destination);
 
     this.audioCtx = ctx;
+    this.preampNode = preamp;
+    this.pannerNode = panner;
     this.analyser = analyser;
     this.callbacks.onAudioGraphReady?.(analyser);
   }
 
   private applyFilterGains(): void {
+    if (this.preampNode) {
+      this.preampNode.gain.value = this.eqEnabled ? Math.pow(10, this.preampDb / 20) : 1;
+    }
     if (this.filters.length === 0) return;
     this.filters.forEach((filter, idx) => {
       filter.gain.value = this.eqEnabled ? this.eqGains[idx] : 0;
@@ -186,10 +205,24 @@ export class AudioEngine {
     return this.audio.muted;
   }
 
-  // API del Ecualizador
+  // API del Ecualizador y Balance
   public setEqEnabled(enabled: boolean): void {
     this.eqEnabled = enabled;
     this.applyFilterGains();
+  }
+
+  public setPreampGain(db: number): void {
+    this.preampDb = Math.max(-12, Math.min(12, db));
+    if (this.preampNode && this.eqEnabled) {
+      this.preampNode.gain.value = Math.pow(10, this.preampDb / 20);
+    }
+  }
+
+  public setBalance(pan: number): void {
+    this.balance = Math.max(-1, Math.min(1, pan));
+    if (this.pannerNode) {
+      this.pannerNode.pan.value = this.balance;
+    }
   }
 
   public setBandGain(bandIndex: number, db: number): void {

@@ -1,0 +1,33 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta
+    http-equiv="Content-Security-Policy"
+    content="default-src 'self'; style-src 'self' 'unsafe-inline';"
+  />
+  <title>Exum — Letras</title>
+  <link rel="stylesheet" href="./styles/floating.css" />
+</head>
+<body>
+  <div class="float-shell">
+    <header class="float-titlebar">
+      <span id="lyrics-win-title" class="float-title">🎤 EXUM — LETRAS</span>
+      <div class="float-actions">
+        <button id="btn-pin" class="float-btn" title="Mantener siempre visible">📌</button>
+        <button id="btn-min" class="float-btn" title="Minimizar">_</button>
+        <button id="btn-close" class="float-btn float-btn-close" title="Cerrar">×</button>
+      </div>
+    </header>
+
+    <main class="float-body">
+      <div id="lyrics-content" class="lyrics-scroll">
+        <div class="lyrics-message">Reproduce una canción en Exum para ver su letra sincronizada.</div>
+      </div>
+    </main>
+  </div>
+
+  <script type="module" src="./dist/renderer/lyricsWindow.js"></script>
+</body>
+</html>

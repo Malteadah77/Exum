@@ -14,11 +14,13 @@
   "license": "ISC",
   "type": "commonjs",
   "devDependencies": {
+    "@types/adm-zip": "^0.5.8",
     "@types/node": "^26.6.10",
     "electron": "^45.5.0",
     "typescript": "^7.0.2"
   },
   "dependencies": {
+    "adm-zip": "^0.6.1",
     "music-metadata": "^13.0.0"
   }
 }

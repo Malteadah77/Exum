@@ -1,212 +1,136 @@
 <!DOCTYPE html>
-<html lang="es" data-theme="winamp-classic">
+<html lang="es">
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <meta
     http-equiv="Content-Security-Policy"
-    content="default-src 'self'; media-src 'self' file:; style-src 'self' 'unsafe-inline';"
+    content="default-src 'self'; media-src 'self' file:; img-src 'self' data:; style-src 'self' 'unsafe-inline';"
   />
   <title>Exum</title>
-  <link rel="stylesheet" href="./styles/themes.css" />
-  <link rel="stylesheet" href="./styles/main.css" />
+  <link rel="stylesheet" href="./styles/classic.css" />
 </head>
 <body>
   <div id="player-shell" class="player-shell">
-    <!-- Barra superior arrastrable -->
-    <header class="titlebar">
-      <div class="titlebar-brand">
-        <span class="brand-dot"></span>
-        <span class="brand-title">EXUM v0.4</span>
-      </div>
-      <div class="titlebar-actions">
-        <button id="btn-eq-panel" class="win-btn normal-only" title="Mostrar / ocultar ecualizador">EQ</button>
-        <button id="btn-lyrics-panel" class="win-btn normal-only" title="Letras sincronizadas (LRCLIB)">LRC</button>
-        <button id="btn-skin-editor" class="win-btn normal-only" title="Editor de skin personalizada">🎨</button>
-        <button id="btn-theme" class="win-btn normal-only" title="Cambiar skin">SKIN</button>
-        <button id="btn-mini-mode" class="win-btn" title="Modo mini-barra flotante (siempre visible)">MINI</button>
-        <button id="btn-minimize" class="win-btn" title="Minimizar">_</button>
-        <button id="btn-close" class="win-btn win-btn-close" title="Cerrar">×</button>
-      </div>
-    </header>
-
-    <!-- Vista compacta exclusiva para Modo Mini-Barra Flotante -->
+    <!-- Modo Mini-Barra Flotante (Shade Mode) -->
     <section id="mini-bar" class="mini-bar">
       <div class="mini-info">
         <span id="mini-time" class="mini-time">00:00</span>
-        <span id="mini-title" class="mini-title">Ninguna canción cargada</span>
+        <span id="mini-title" class="mini-title">Exum — Sin canción</span>
       </div>
       <div class="mini-controls">
-        <button id="mini-prev" class="ctrl-btn" title="Anterior">⏮</button>
-        <button id="mini-play" class="ctrl-btn ctrl-btn-primary" title="Play / Pause">⏯</button>
-        <button id="mini-next" class="ctrl-btn" title="Siguiente">⏭</button>
+        <button id="mini-prev" class="mini-btn" title="Anterior">⏮</button>
+        <button id="mini-play" class="mini-btn" title="Play / Pause">⏯</button>
+        <button id="mini-next" class="mini-btn" title="Siguiente">⏭</button>
+        <button id="mini-restore" class="mini-btn" title="Restaurar tamaño">⤢</button>
       </div>
     </section>
 
-    <!-- Módulo superior: Pantalla LCD + Visualizador + Controles -->
-    <section class="deck-area normal-only">
-      <div class="lcd-screen">
-        <div class="lcd-left">
-          <div id="lcd-time" class="lcd-time">00:00</div>
-          <canvas
-            id="visualizer-canvas"
-            class="visualizer-canvas"
-            width="132"
-            height="34"
-            title="Clic para cambiar visualizador (Barras / Onda / Off)"
-          ></canvas>
+    <!-- Bloque Winamp (275px base que escala proporcionalmente al 100% del ancho de ventana) -->
+    <div id="winamp-decks" class="winamp-decks normal-only">
+      <!-- 1. Main Deck (275x116) -->
+      <div class="wsz-main-deck">
+        <div class="wsz-titlebar">
+          <span class="wsz-fallback-brand">EXUM v0.5</span>
+          <button id="wsz-win-min" class="wsz-win-btn" title="Minimizar">_</button>
+          <button id="wsz-win-shade" class="wsz-win-btn" title="Modo mini-barra flotante">▬</button>
+          <button id="wsz-win-close" class="wsz-win-btn" title="Cerrar">×</button>
         </div>
 
-        <div class="lcd-info">
-          <div id="track-title" class="lcd-track">NINGUNA CANCIÓN CARGADA</div>
-          <div id="track-artist" class="lcd-artist">Selecciona una carpeta o arrastra tus MP3 aquí</div>
-          <div id="status-text" class="lcd-status">LISTO</div>
-        </div>
-      </div>
-
-      <!-- Barra de progreso -->
-      <div class="seek-row">
-        <span id="time-current" class="time-label">00:00</span>
-        <input
-          id="seek-bar"
-          class="range-slider"
-          type="range"
-          min="0"
-          max="0"
-          step="0.1"
-          value="0"
-          disabled
-        />
-        <span id="time-total" class="time-label">00:00</span>
-      </div>
-
-      <!-- Controles de reproducción + Volumen -->
-      <div class="controls-bar">
-        <div class="transport-group">
-          <button id="btn-prev" class="ctrl-btn" title="Anterior (Ctrl+Alt+←)" disabled>⏮</button>
-          <button id="btn-play" class="ctrl-btn ctrl-btn-primary" title="Reproducir (Espacio / Ctrl+Alt+Espacio)" disabled>▶</button>
-          <button id="btn-pause" class="ctrl-btn" title="Pausar" disabled>⏸</button>
-          <button id="btn-stop" class="ctrl-btn" title="Detener" disabled>⏹</button>
-          <button id="btn-next" class="ctrl-btn" title="Siguiente (Ctrl+Alt+→)" disabled>⏭</button>
-          <button id="btn-shuffle" class="ctrl-btn" title="Aleatorio">🔀</button>
-          <button id="btn-repeat" class="ctrl-btn" title="Repetir: desactivado">🔁</button>
+        <div class="wsz-clock">
+          <span id="wsz-d0" class="wsz-digit">0</span>
+          <span class="wsz-digit-gap"></span>
+          <span id="wsz-d1" class="wsz-digit">0</span>
+          <span class="wsz-digit-colon">:</span>
+          <span id="wsz-d2" class="wsz-digit">0</span>
+          <span class="wsz-digit-gap"></span>
+          <span id="wsz-d3" class="wsz-digit">0</span>
         </div>
 
-        <div class="volume-group">
-          <button id="btn-mute" class="ctrl-btn ctrl-btn-icon" title="Silenciar">🔊</button>
-          <input
-            id="volume-bar"
-            class="range-slider volume-slider"
-            type="range"
-            min="0"
-            max="100"
-            value="80"
-          />
-          <span id="volume-value" class="time-label">80%</span>
+        <canvas
+          id="wsz-vis-canvas"
+          class="wsz-vis-canvas"
+          width="76"
+          height="16"
+          title="Clic para cambiar visualizador (Barras / Onda / Off)"
+        ></canvas>
+
+        <!-- Cuadrícula exacta del título (top:24, left:111, 154x12) -->
+        <div id="wsz-track-title" class="wsz-track-title">EXUM — ARRASTRA MP3 O ELIGE CARPETA</div>
+
+        <!-- Volumen (68x13 en x:107, y:57) -->
+        <div class="wsz-vol-wrap">
+          <div id="wsz-vol-bg" class="wsz-vol-bg"></div>
+          <input id="wsz-vol-slider" class="wsz-vol-slider" type="range" min="0" max="100" value="80" title="Volumen" />
         </div>
-      </div>
-    </section>
 
-    <!-- Panel colapsable: Ecualizador de 10 bandas -->
-    <section id="eq-panel" class="eq-panel hidden normal-only">
-      <div class="eq-header">
-        <div class="eq-header-left">
-          <button id="btn-eq-toggle" class="tool-btn eq-toggle-active" title="Activar o desactivar ecualizador">
-            EQ: ON
-          </button>
-          <select id="eq-preset-select" class="eq-select" title="Elegir preset de ecualización">
-            <option value="flat">Flat (Plano)</option>
-            <option value="rock">Rock</option>
-            <option value="pop">Pop</option>
-            <option value="bass-boost">Bass Boost</option>
-            <option value="vocal">Vocal</option>
-            <option value="electronic">Electronic</option>
-            <option value="custom">Personalizado</option>
-          </select>
+        <!-- Balance Izq/Der (38x13 en x:177, y:57) -->
+        <div class="wsz-bal-wrap">
+          <div id="wsz-bal-bg" class="wsz-bal-bg"></div>
+          <input id="wsz-bal-slider" class="wsz-bal-slider" type="range" min="-100" max="100" value="0" title="Balance (doble clic para centrar)" />
         </div>
-        <button id="btn-eq-reset" class="tool-btn" title="Restablecer todas las bandas a 0 dB">
-          RESET
-        </button>
-      </div>
-      <div id="eq-bands-container" class="eq-bands"></div>
-    </section>
 
-    <!-- Panel colapsable: Editor de Skin Personalizada -->
-    <section id="skin-editor-panel" class="skin-editor-panel hidden normal-only">
-      <div class="skin-editor-header">
-        <span class="panel-label">🎨 EDITOR DE SKIN PERSONALIZADA</span>
-        <select id="skin-font-select" class="eq-select" title="Fuente de la pantalla LCD">
-          <option value="'Consolas', monospace">Consolas (Retro)</option>
-          <option value="'JetBrains Mono', monospace">JetBrains Mono</option>
-          <option value="'Courier New', monospace">Courier New</option>
-          <option value="'Segoe UI', system-ui, sans-serif">Segoe UI (Moderna)</option>
-        </select>
-      </div>
-      <div class="skin-pickers">
-        <label class="color-field">
-          <span>Fondo</span>
-          <input id="color-bg-shell" type="color" value="#14111d" />
-        </label>
-        <label class="color-field">
-          <span>Barra</span>
-          <input id="color-bg-titlebar" type="color" value="#1e192b" />
-        </label>
-        <label class="color-field">
-          <span>LCD</span>
-          <input id="color-bg-lcd" type="color" value="#0c0914" />
-        </label>
-        <label class="color-field">
-          <span>Texto</span>
-          <input id="color-text-main" type="color" value="#f4f0ff" />
-        </label>
-        <label class="color-field">
-          <span>Acento</span>
-          <input id="color-accent" type="color" value="#c084fc" />
-        </label>
-      </div>
-    </section>
+        <!-- Botones EQ y PL -->
+        <button id="wsz-btn-eq-toggle" class="wsz-eq-toggle active" title="Mostrar / ocultar Ecualizador">EQ</button>
+        <button id="wsz-btn-pl-toggle" class="wsz-pl-toggle active" title="Mostrar / ocultar Playlist">PL</button>
 
-    <!-- Panel colapsable: Letras Sincronizadas -->
-    <section id="lyrics-panel" class="lyrics-panel hidden normal-only">
-      <div class="lyrics-header">
-        <span class="panel-label">🎤 LETRAS SINCRONIZADAS (LRCLIB)</span>
-        <span class="lyrics-hint">Clic en una línea para saltar</span>
-      </div>
-      <div id="lyrics-content" class="lyrics-content">
-        <div class="lyrics-message">Reproduce una canción para buscar su letra.</div>
-      </div>
-    </section>
-
-    <!-- Módulo inferior: Biblioteca y Playlist -->
-    <section class="playlist-section normal-only">
-      <div class="playlist-toolbar">
-        <div class="playlist-actions">
-          <button id="btn-folder" class="tool-btn" title="Elegir carpeta dedicada de música">
-            📁 CARPETA
-          </button>
-          <button id="btn-open" class="tool-btn" title="Agregar archivos sueltos">
-            + ARCHIVOS
-          </button>
+        <!-- Barra de progreso -->
+        <div class="wsz-pos-wrap">
+          <div id="wsz-pos-thumb" class="wsz-pos-thumb"></div>
+          <input id="wsz-pos-slider" class="wsz-pos-slider" type="range" min="0" max="0" step="0.1" value="0" />
         </div>
-        <input
-          id="search-input"
-          class="search-input"
-          type="text"
-          placeholder="Buscar canción o artista..."
-        />
-        <span id="playlist-count" class="playlist-count">0 pistas</span>
+
+        <!-- Transporte -->
+        <button id="wsz-btn-prev" class="wsz-cbtn" title="Anterior">⏮</button>
+        <button id="wsz-btn-play" class="wsz-cbtn" title="Play">▶</button>
+        <button id="wsz-btn-pause" class="wsz-cbtn" title="Pause">⏸</button>
+        <button id="wsz-btn-stop" class="wsz-cbtn" title="Stop">⏹</button>
+        <button id="wsz-btn-next" class="wsz-cbtn" title="Siguiente">⏭</button>
+        <button id="wsz-btn-eject" class="wsz-cbtn" title="Agregar archivos">⏏</button>
+
+        <button id="wsz-btn-shuffle" class="wsz-shufrep-btn" title="Aleatorio">SHUF</button>
+        <button id="wsz-btn-repeat" class="wsz-shufrep-btn" title="Repetir">REP</button>
+      </div>
+
+      <!-- 2. Equalizer Deck (275x116) -->
+      <div id="wsz-eq-deck" class="wsz-eq-deck">
+        <button id="wsz-eq-on" class="wsz-eq-on-btn active" title="Encender / apagar Ecualizador">ON</button>
+        <button id="wsz-eq-auto" class="wsz-eq-auto-btn" title="Restablecer EQ a 0 dB (Flat)">AUTO</button>
+        <button id="wsz-eq-presets-btn" class="wsz-eq-presets-btn" title="Elegir preset de ecualización">PRESETS</button>
+
+        <!-- Menú desplegable de Presets -->
+        <div id="wsz-presets-menu" class="wsz-presets-menu hidden"></div>
+
+        <!-- Preamp + 10 bandas renderizadas con sprites de eqmain.bmp -->
+        <div id="wsz-eq-sliders"></div>
+      </div>
+    </div>
+
+    <!-- 3. Playlist fluida -->
+    <section id="playlist-section" class="playlist-section normal-only">
+      <div class="playlist-header">
+        <span class="playlist-title-fallback">EXUM PLAYLIST</span>
+        <span id="playlist-count" class="playlist-count-pill">0 pistas</span>
       </div>
 
       <div id="playlist-container" class="playlist-list">
         <div class="playlist-empty">
-          Arrastra archivos o carpetas de música aquí, o presiona <strong>📁 CARPETA</strong>.
+          Arrastra archivos de música o skins <strong>.wsz</strong> aquí, o presiona <strong>📁</strong>.
         </div>
+      </div>
+
+      <div class="playlist-footer">
+        <button id="btn-folder" class="pl-btn" title="Elegir carpeta dedicada de música">📁</button>
+        <button id="btn-open" class="pl-btn" title="Agregar archivos sueltos">+</button>
+        <input id="search-input" class="pl-search" type="text" placeholder="Buscar..." />
+        <button id="btn-lyrics" class="pl-btn" title="Abrir ventana flotante de Letras">LRC</button>
+        <button id="btn-skins" class="pl-btn" title="Abrir gestor y museo de Skins .wsz">SKINS</button>
       </div>
     </section>
 
-    <!-- Overlay visual cuando arrastras archivos sobre la ventana -->
+    <!-- Overlay Drag & Drop -->
     <div id="drop-overlay" class="drop-overlay">
-      <div class="drop-overlay-box">Suelta tus archivos o carpetas de audio aquí</div>
+      <div class="drop-overlay-box">Suelta música (MP3/FLAC/WAV) o una skin Winamp (.wsz) aquí</div>
     </div>
   </div>
 

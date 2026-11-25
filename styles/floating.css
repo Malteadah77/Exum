@@ -1,0 +1,306 @@
+/* Estilos compartidos para las ventanas flotantes (Letras y Gestor de Skins).
+   Heredan en vivo la paleta exacta de pledit.txt de la skin .wsz activa. */
+
+:root {
+  --wsz-pl-normal: #c93b52;
+  --wsz-pl-current: #fce7eb;
+  --wsz-pl-bg: #0e090b;
+  --wsz-pl-sel: #5a1423;
+  --wsz-pl-font: Consolas, monospace;
+}
+
+* {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+  user-select: none;
+}
+
+html,
+body {
+  width: 100%;
+  height: 100%;
+  overflow: hidden;
+  background: var(--wsz-pl-bg);
+  color: var(--wsz-pl-normal);
+  font-family: var(--wsz-pl-font);
+}
+
+.float-shell {
+  display: flex;
+  flex-direction: column;
+  width: 100%;
+  height: 100%;
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  background: var(--wsz-pl-bg);
+}
+
+.float-titlebar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 6px 10px;
+  background: rgba(255, 255, 255, 0.06);
+  border-bottom: 1px solid rgba(255, 255, 255, 0.16);
+  -webkit-app-region: drag;
+}
+
+.float-title {
+  font-size: 11px;
+  font-weight: 700;
+  color: var(--wsz-pl-current);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.float-actions {
+  display: flex;
+  gap: 5px;
+  flex-shrink: 0;
+  -webkit-app-region: no-drag;
+}
+
+.float-btn {
+  background: rgba(255, 255, 255, 0.08);
+  color: var(--wsz-pl-normal);
+  border: 1px solid rgba(255, 255, 255, 0.22);
+  border-radius: 3px;
+  padding: 2px 7px;
+  font-family: var(--wsz-pl-font);
+  font-size: 11px;
+  cursor: pointer;
+}
+
+.float-btn:hover,
+.float-btn.active {
+  background: var(--wsz-pl-sel);
+  color: var(--wsz-pl-current);
+  border-color: var(--wsz-pl-normal);
+}
+
+.float-btn-close:hover {
+  background: #e11d48;
+  border-color: #e11d48;
+  color: #fff;
+}
+
+.float-body {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  padding: 10px;
+  gap: 10px;
+  overflow: hidden;
+}
+
+/* ---------- VENTANA DE LETRAS ---------- */
+.lyrics-scroll {
+  flex: 1;
+  overflow-y: auto;
+  padding: 12px 10px;
+  text-align: center;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-radius: 4px;
+  background: rgba(0, 0, 0, 0.25);
+}
+
+.lyrics-scroll::-webkit-scrollbar,
+.museum-grid::-webkit-scrollbar,
+.saved-skins-list::-webkit-scrollbar {
+  width: 6px;
+}
+
+.lyrics-scroll::-webkit-scrollbar-thumb,
+.museum-grid::-webkit-scrollbar-thumb,
+.saved-skins-list::-webkit-scrollbar-thumb {
+  background: var(--wsz-pl-sel);
+  border-radius: 3px;
+}
+
+.lyrics-message {
+  font-size: 12px;
+  opacity: 0.75;
+  padding: 28px 10px;
+}
+
+.lyric-line {
+  font-size: 13px;
+  line-height: 1.8;
+  color: var(--wsz-pl-normal);
+  opacity: 0.65;
+  padding: 2px 6px;
+  border-radius: 3px;
+  transition: opacity 0.15s ease, color 0.15s ease;
+}
+
+.lyric-line.synced {
+  cursor: pointer;
+}
+
+.lyric-line.synced:hover {
+  opacity: 0.95;
+}
+
+.lyric-line.active {
+  opacity: 1;
+  color: var(--wsz-pl-current);
+  background: var(--wsz-pl-sel);
+  font-weight: 700;
+  font-size: 14px;
+}
+
+.lyrics-plain {
+  font-family: inherit;
+  font-size: 12px;
+  line-height: 1.7;
+  color: var(--wsz-pl-normal);
+  white-space: pre-wrap;
+}
+
+/* ---------- VENTANA GESTOR DE SKINS ---------- */
+.section-block {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  min-height: 0;
+}
+
+.section-block.grow {
+  flex: 1;
+}
+
+.section-bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+
+.section-title {
+  font-size: 11px;
+  font-weight: 700;
+  color: var(--wsz-pl-current);
+}
+
+.search-row {
+  display: flex;
+  gap: 6px;
+}
+
+.float-input {
+  flex: 1;
+  background: rgba(0, 0, 0, 0.35);
+  color: var(--wsz-pl-current);
+  border: 1px solid rgba(255, 255, 255, 0.22);
+  border-radius: 3px;
+  padding: 4px 8px;
+  font-family: var(--wsz-pl-font);
+  font-size: 11px;
+  outline: none;
+  user-select: text;
+}
+
+.float-input:focus {
+  border-color: var(--wsz-pl-normal);
+}
+
+.saved-skins-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  max-height: 108px;
+  overflow-y: auto;
+  padding: 6px;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-radius: 4px;
+  background: rgba(0, 0, 0, 0.2);
+}
+
+.saved-skin-item {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  background: rgba(255, 255, 255, 0.08);
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  border-radius: 4px;
+  padding: 3px 6px;
+  font-size: 11px;
+}
+
+.saved-skin-item.active {
+  background: var(--wsz-pl-sel);
+  border-color: var(--wsz-pl-normal);
+  color: var(--wsz-pl-current);
+}
+
+.saved-skin-apply {
+  background: none;
+  border: none;
+  color: inherit;
+  font-family: inherit;
+  font-size: 11px;
+  cursor: pointer;
+  max-width: 160px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.saved-skin-del {
+  background: none;
+  border: none;
+  color: #f87171;
+  font-size: 12px;
+  cursor: pointer;
+  padding: 0 2px;
+}
+
+.saved-skin-del:hover {
+  color: #ef4444;
+}
+
+.museum-grid {
+  flex: 1;
+  overflow-y: auto;
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(136px, 1fr));
+  gap: 8px;
+  padding-right: 4px;
+}
+
+.museum-card {
+  display: flex;
+  flex-direction: column;
+  background: rgba(0, 0, 0, 0.3);
+  border: 1px solid rgba(255, 255, 255, 0.16);
+  border-radius: 4px;
+  overflow: hidden;
+  cursor: pointer;
+  transition: border-color 0.15s ease, transform 0.12s ease;
+}
+
+.museum-card:hover {
+  border-color: var(--wsz-pl-normal);
+  transform: translateY(-1px);
+}
+
+.museum-thumb {
+  width: 100%;
+  height: 82px;
+  object-fit: cover;
+  image-rendering: pixelated;
+  background: #000;
+}
+
+.museum-name {
+  padding: 5px 6px;
+  font-size: 10px;
+  color: var(--wsz-pl-current);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}

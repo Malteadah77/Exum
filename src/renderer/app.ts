@@ -1,16 +1,8 @@
-import type {
-  CustomSkinConfig,
-  ElectronAPI,
-  RepeatMode,
-  ShortcutAction,
-  Track,
-} from '../shared/types.js';
-import { AudioEngine, PlaybackState, formatTime } from './audioEngine.js';
-import { EQ_BANDS, EQ_PRESETS } from './equalizerPresets.js';
-import { LyricsController } from './lyricsController.js';
+import type { ElectronAPI, ShortcutAction, Track, WszSkinData } from '../shared/types.js';
+import { AudioEngine, formatTime } from './audioEngine.js';
 import { PlaylistManager } from './playlistManager.js';
-import { ThemeManager } from './themeManager.js';
 import { AudioVisualizer } from './visualizer.js';
+import { DEFAULT_PALETTE, WszClassicView } from './wszRenderer.js';
 
 declare global {
   interface Window {
@@ -18,17 +10,10 @@ declare global {
   }
 }
 
-// Referencias a elementos del DOM
 const playerShell = document.getElementById('player-shell');
 const dropOverlay = document.getElementById('drop-overlay');
-
-const btnEqPanel = document.getElementById('btn-eq-panel');
-const btnLyricsPanel = document.getElementById('btn-lyrics-panel');
-const btnSkinEditor = document.getElementById('btn-skin-editor');
-const btnTheme = document.getElementById('btn-theme');
-const btnMiniMode = document.getElementById('btn-mini-mode');
-const btnMinimize = document.getElementById('btn-minimize');
-const btnClose = document.getElementById('btn-close');
+const winampDecks = document.getElementById('winamp-decks');
+const visCanvas = document.getElementById('wsz-vis-canvas') as HTMLCanvasElement | null;
 
 // Mini-barra flotante
 const miniTime = document.getElementById('mini-time');
@@ -36,180 +21,55 @@ const miniTitle = document.getElementById('mini-title');
 const miniPrev = document.getElementById('mini-prev');
 const miniPlay = document.getElementById('mini-play');
 const miniNext = document.getElementById('mini-next');
+const miniRestore = document.getElementById('mini-restore');
 
+// Playlist y barra inferior
+const playlistContainer = document.getElementById('playlist-container');
+const playlistCount = document.getElementById('playlist-count');
+const searchInput = document.getElementById('search-input') as HTMLInputElement | null;
 const btnFolder = document.getElementById('btn-folder');
 const btnOpen = document.getElementById('btn-open');
-const btnPrev = document.getElementById('btn-prev') as HTMLButtonElement | null;
-const btnPlay = document.getElementById('btn-play') as HTMLButtonElement | null;
-const btnPause = document.getElementById('btn-pause') as HTMLButtonElement | null;
-const btnStop = document.getElementById('btn-stop') as HTMLButtonElement | null;
-const btnNext = document.getElementById('btn-next') as HTMLButtonElement | null;
-const btnShuffle = document.getElementById('btn-shuffle') as HTMLButtonElement | null;
-const btnRepeat = document.getElementById('btn-repeat') as HTMLButtonElement | null;
-const btnMute = document.getElementById('btn-mute');
+const btnLyrics = document.getElementById('btn-lyrics');
+const btnSkins = document.getElementById('btn-skins');
 
-const lcdTime = document.getElementById('lcd-time');
-const trackTitle = document.getElementById('track-title');
-const trackArtist = document.getElementById('track-artist');
-const statusText = document.getElementById('status-text');
-const visualizerCanvas = document.getElementById('visualizer-canvas') as HTMLCanvasElement | null;
-
-const seekBar = document.getElementById('seek-bar') as HTMLInputElement | null;
-const timeCurrent = document.getElementById('time-current');
-const timeTotal = document.getElementById('time-total');
-
-const volumeBar = document.getElementById('volume-bar') as HTMLInputElement | null;
-const volumeValue = document.getElementById('volume-value');
-
-// Ecualizador
-const eqPanel = document.getElementById('eq-panel');
-const btnEqToggle = document.getElementById('btn-eq-toggle');
-const eqPresetSelect = document.getElementById('eq-preset-select') as HTMLSelectElement | null;
-const btnEqReset = document.getElementById('btn-eq-reset');
-const eqBandsContainer = document.getElementById('eq-bands-container');
-
-// Editor de Skin personalizada
-const skinEditorPanel = document.getElementById('skin-editor-panel');
-const skinFontSelect = document.getElementById('skin-font-select') as HTMLSelectElement | null;
-const colorBgShell = document.getElementById('color-bg-shell') as HTMLInputElement | null;
-const colorBgTitlebar = document.getElementById('color-bg-titlebar') as HTMLInputElement | null;
-const colorBgLcd = document.getElementById('color-bg-lcd') as HTMLInputElement | null;
-const colorTextMain = document.getElementById('color-text-main') as HTMLInputElement | null;
-const colorAccent = document.getElementById('color-accent') as HTMLInputElement | null;
-
-// Letras
-const lyricsPanel = document.getElementById('lyrics-panel');
-const lyricsContent = document.getElementById('lyrics-content');
-
-// Playlist
-const searchInput = document.getElementById('search-input') as HTMLInputElement | null;
-const playlistCount = document.getElementById('playlist-count');
-const playlistContainer = document.getElementById('playlist-container');
-
-let isSeeking = false;
 let isMiniMode = false;
 let searchQuery = '';
 
-const eqSliders: HTMLInputElement[] = [];
-const eqDbLabels: HTMLSpanElement[] = [];
+const visualizer = visCanvas ? new AudioVisualizer(visCanvas, 18) : null;
 
-const statusLabels: Record<PlaybackState, string> = {
-  idle: 'LISTO',
-  playing: 'REPRODUCIENDO',
-  paused: 'EN PAUSA',
-  stopped: 'DETENIDO',
-};
-
-const themeManager = new ThemeManager();
-const visualizer = visualizerCanvas ? new AudioVisualizer(visualizerCanvas) : null;
-
-function formatAudioTechInfo(track: Track | null): string {
-  if (!track) return '';
-  const parts: string[] = [];
-  if (track.codec) parts.push(track.codec.toUpperCase());
-  if (track.bitrate) parts.push(`${track.bitrate} kbps`);
-  if (track.sampleRate) parts.push(`${(track.sampleRate / 1000).toFixed(1)} kHz`);
-  return parts.join(' • ');
-}
-
-function formatDb(value: number): string {
-  return value > 0 ? `+${value}` : String(value);
-}
-
-function syncSkinEditorInputs(skin: CustomSkinConfig): void {
-  if (colorBgShell) colorBgShell.value = skin.bgShell;
-  if (colorBgTitlebar) colorBgTitlebar.value = skin.bgTitlebar;
-  if (colorBgLcd) colorBgLcd.value = skin.bgLcd;
-  if (colorTextMain) colorTextMain.value = skin.textMain;
-  if (colorAccent) colorAccent.value = skin.accent;
-  if (skinFontSelect) skinFontSelect.value = skin.fontLcd;
-}
-
-function updateVolumeUI(percent: number): void {
-  engine.setVolume(percent / 100);
-  if (volumeBar) volumeBar.value = String(percent);
-  if (volumeValue) volumeValue.textContent = `${percent}%`;
-  if (btnMute) btnMute.textContent = percent === 0 ? '🔇' : '🔊';
-}
-
-function updateTransportAvailability(hasTracks: boolean): void {
-  if (btnPrev) btnPrev.disabled = !hasTracks;
-  if (btnNext) btnNext.disabled = !hasTracks;
-  if (btnPlay) btnPlay.disabled = !hasTracks;
-  if (btnPause) btnPause.disabled = !hasTracks;
-  if (btnStop) btnStop.disabled = !hasTracks;
-}
-
-function syncEqUI(enabled: boolean, preset: string, gains: number[]): void {
-  if (btnEqToggle) {
-    btnEqToggle.textContent = enabled ? 'EQ: ON' : 'EQ: OFF';
-    btnEqToggle.classList.toggle('eq-toggle-active', enabled);
+async function toggleMiniMode(): Promise<void> {
+  isMiniMode = await window.electronAPI.setMiniMode(!isMiniMode);
+  document.body.classList.toggle('mini-mode', isMiniMode);
+  if (!isMiniMode) {
+    classicView?.fitToWindowWidth();
   }
-  eqPanel?.classList.toggle('eq-disabled', !enabled);
-  if (eqPresetSelect) eqPresetSelect.value = preset;
-
-  gains.forEach((db, idx) => {
-    if (eqSliders[idx]) eqSliders[idx].value = String(db);
-    if (eqDbLabels[idx]) eqDbLabels[idx].textContent = formatDb(db);
-  });
 }
 
-function buildEqBandsUI(): void {
-  if (!eqBandsContainer) return;
-  eqBandsContainer.innerHTML = '';
+async function openAudioFilesAction(): Promise<void> {
+  const tracks = await window.electronAPI.openAudioFiles();
+  if (tracks.length === 0) return;
+  playlist.addTracks(tracks, !engine.hasTrack);
+}
 
-  EQ_BANDS.forEach((band, index) => {
-    const col = document.createElement('div');
-    col.className = 'eq-band';
+async function selectFolderAction(): Promise<void> {
+  const result = await window.electronAPI.selectMusicFolder();
+  if (!result) return;
+  playlist.setTracks(result.tracks, false);
+}
 
-    const dbLabel = document.createElement('span');
-    dbLabel.className = 'eq-db';
-    dbLabel.textContent = '0';
-
-    const sliderWrap = document.createElement('div');
-    sliderWrap.className = 'eq-slider-wrap';
-
-    const slider = document.createElement('input');
-    slider.type = 'range';
-    slider.className = 'eq-slider';
-    slider.min = '-12';
-    slider.max = '12';
-    slider.step = '1';
-    slider.value = '0';
-    slider.title = `${band.label} Hz`;
-
-    slider.addEventListener('input', () => {
-      const db = Number(slider.value);
-      dbLabel.textContent = formatDb(db);
-      engine.setBandGain(index, db);
-      if (eqPresetSelect) eqPresetSelect.value = 'custom';
-    });
-
-    slider.addEventListener('change', () => {
-      void window.electronAPI.saveConfig({
-        eqPreset: 'custom',
-        eqGains: engine.getEqGains(),
-      });
-    });
-
-    const freqLabel = document.createElement('span');
-    freqLabel.className = 'eq-freq';
-    freqLabel.textContent = band.label;
-
-    sliderWrap.appendChild(slider);
-    col.append(dbLabel, sliderWrap, freqLabel);
-    eqBandsContainer.appendChild(col);
-
-    eqSliders.push(slider);
-    eqDbLabels.push(dbLabel);
-  });
+function triggerPlayOrStartFirst(): void {
+  if (!engine.hasTrack && playlist.allTracks.length > 0) {
+    playlist.selectIndex(0);
+    return;
+  }
+  engine.togglePlay();
 }
 
 function renderPlaylist(tracks: Track[], activeIndex: number): void {
   if (!playlistContainer) return;
 
   const query = searchQuery.trim().toLowerCase();
-  const indexedTracks = tracks
+  const filtered = tracks
     .map((track, index) => ({ track, index }))
     .filter(({ track }) => {
       if (!query) return true;
@@ -222,338 +82,188 @@ function renderPlaylist(tracks: Track[], activeIndex: number): void {
 
   if (playlistCount) {
     playlistCount.textContent =
-      query && indexedTracks.length !== tracks.length
-        ? `${indexedTracks.length} / ${tracks.length} pistas`
+      query && filtered.length !== tracks.length
+        ? `${filtered.length}/${tracks.length}`
         : `${tracks.length} pistas`;
   }
 
-  updateTransportAvailability(tracks.length > 0);
   playlistContainer.innerHTML = '';
 
-  if (indexedTracks.length === 0) {
+  if (filtered.length === 0) {
     const empty = document.createElement('div');
     empty.className = 'playlist-empty';
     empty.textContent =
       tracks.length === 0
-        ? 'Arrastra archivos o carpetas de música aquí, o presiona 📁 CARPETA.'
-        : 'No se encontraron canciones con esa búsqueda.';
+        ? 'Arrastra archivos de música o skins .wsz aquí, o presiona 📁.'
+        : 'Sin resultados para esa búsqueda.';
     playlistContainer.appendChild(empty);
     return;
   }
 
-  for (const { track, index } of indexedTracks) {
+  for (const { track, index } of filtered) {
     const row = document.createElement('div');
-    row.className = `playlist-item${index === activeIndex ? ' active' : ''}`;
+    row.className = `playlist-row${index === activeIndex ? ' active' : ''}`;
 
-    const main = document.createElement('div');
-    main.className = 'playlist-item-main';
+    const title = document.createElement('span');
+    title.className = 'playlist-row-title';
+    title.textContent =
+      track.artist && track.artist !== 'Artista desconocido'
+        ? `${index + 1}. ${track.artist} - ${track.title}`
+        : `${index + 1}. ${track.title}`;
 
-    const idxSpan = document.createElement('span');
-    idxSpan.className = 'playlist-index';
-    idxSpan.textContent = String(index + 1).padStart(2, '0');
+    const dur = document.createElement('span');
+    dur.className = 'playlist-row-dur';
+    dur.textContent = formatTime(track.duration);
 
-    const meta = document.createElement('div');
-    meta.className = 'playlist-meta';
-
-    const titleEl = document.createElement('span');
-    titleEl.className = 'playlist-title';
-    titleEl.textContent = track.title;
-
-    const artistEl = document.createElement('span');
-    artistEl.className = 'playlist-artist';
-    artistEl.textContent = track.artist;
-
-    meta.append(titleEl, artistEl);
-    main.append(idxSpan, meta);
-
-    const durSpan = document.createElement('span');
-    durSpan.className = 'playlist-duration';
-    durSpan.textContent = formatTime(track.duration);
-
-    row.append(main, durSpan);
-    row.addEventListener('dblclick', () => {
-      playlist.selectIndex(index);
-    });
-
+    row.append(title, dur);
+    row.addEventListener('dblclick', () => playlist.selectIndex(index));
     playlistContainer.appendChild(row);
   }
 }
 
-function updateModeButtons(shuffle: boolean, repeatMode: RepeatMode): void {
-  btnShuffle?.classList.toggle('ctrl-btn-active', shuffle);
-  btnRepeat?.classList.toggle('ctrl-btn-active', repeatMode !== 'off');
-
-  if (btnRepeat) {
-    btnRepeat.textContent = repeatMode === 'one' ? '🔂' : '🔁';
-    const labels: Record<RepeatMode, string> = {
-      off: 'Repetir: desactivado',
-      all: 'Repetir: toda la lista',
-      one: 'Repetir: canción actual',
-    };
-    btnRepeat.title = labels[repeatMode];
+function applySkinOrDefault(skin: WszSkinData | null): void {
+  if (skin) {
+    classicView?.applySkin(skin);
+    visualizer?.setCustomPalette(skin.visColors);
+    window.electronAPI.broadcastPalette(skin.pledit);
+  } else {
+    classicView?.clearSkin();
+    visualizer?.setCustomPalette(null);
+    window.electronAPI.broadcastPalette(DEFAULT_PALETTE);
   }
 }
 
-// 1. Motor de audio
+// 1. Motor de Audio (Web Audio API: 10-band EQ + Analyser)
 const engine = new AudioEngine({
-  onAudioGraphReady: (analyser) => {
-    visualizer?.attachAnalyser(analyser);
-  },
+  onAudioGraphReady: (analyser) => visualizer?.attachAnalyser(analyser),
 
   onTrackLoaded: (_title, duration) => {
-    if (timeTotal) timeTotal.textContent = formatTime(duration);
-    if (seekBar) {
-      seekBar.max = String(duration || 0);
-      seekBar.value = '0';
-      seekBar.disabled = false;
-    }
+    classicView?.updateTime(0, duration);
   },
 
   onTimeUpdate: (current, duration) => {
-    if (!isSeeking) {
-      const formatted = formatTime(current);
-      if (lcdTime) lcdTime.textContent = formatted;
-      if (miniTime) miniTime.textContent = formatted;
-      if (timeCurrent) timeCurrent.textContent = formatted;
-      if (seekBar && Number.isFinite(duration)) {
-        seekBar.value = String(current);
-      }
-    }
-    if (lyricsPanel && !lyricsPanel.classList.contains('hidden')) {
-      lyricsController?.syncToTime(current);
-    }
+    classicView?.updateTime(current, duration);
+    if (miniTime) miniTime.textContent = formatTime(current);
+    window.electronAPI.broadcastTime(current);
   },
 
   onStateChange: (state) => {
-    const tech = formatAudioTechInfo(playlist.currentTrack);
-    if (statusText) {
-      statusText.textContent = tech ? `${statusLabels[state]} • ${tech}` : statusLabels[state];
-    }
-    btnPlay?.classList.toggle('ctrl-btn-active', state === 'playing');
-    btnPause?.classList.toggle('ctrl-btn-active', state === 'paused');
     if (miniPlay) miniPlay.textContent = state === 'playing' ? '⏸' : '▶';
   },
 
-  onEnded: () => {
-    playlist.handleTrackEnded();
-  },
-
-  onError: (message) => {
-    if (statusText) statusText.textContent = message.toUpperCase();
-  },
+  onEnded: () => playlist.handleTrackEnded(),
 });
 
-const lyricsController = lyricsContent
-  ? new LyricsController(lyricsContent, (sec) => engine.seek(sec))
-  : null;
-
-// 2. Gestor de playlist
+// 2. Gestor de Playlist
 const playlist = new PlaylistManager({
-  onChange: (tracks, activeIndex) => {
-    renderPlaylist(tracks, activeIndex);
-  },
+  onChange: (tracks, activeIndex) => renderPlaylist(tracks, activeIndex),
 
   onTrackSelect: (track) => {
-    if (trackTitle) trackTitle.textContent = track.title;
+    classicView?.updateTrackInfo(track.title, track.artist);
     if (miniTitle) miniTitle.textContent = `${track.title} — ${track.artist}`;
-    if (trackArtist) {
-      trackArtist.textContent = track.album ? `${track.artist} — ${track.album}` : track.artist;
-    }
     engine.load(track.fileUrl, track.title);
     void engine.play();
-
-    if (lyricsPanel && !lyricsPanel.classList.contains('hidden')) {
-      void lyricsController?.loadForTrack(track);
-    }
+    window.electronAPI.broadcastTrack(track);
   },
 
-  onModeChange: (shuffle, repeatMode) => {
-    updateModeButtons(shuffle, repeatMode);
-  },
+  onModeChange: (shuffle, repeatMode) => classicView?.updateModes(shuffle, repeatMode),
 });
 
-buildEqBandsUI();
+// 3. Vista Winamp Unificada (escalable sin bordes negros)
+const classicView = winampDecks
+  ? new WszClassicView(winampDecks, {
+      onPrev: () => playlist.previous(),
+      onPlay: () => {
+        if (!engine.hasTrack && playlist.allTracks.length > 0) playlist.selectIndex(0);
+        else void engine.play();
+      },
+      onPause: () => engine.pause(),
+      onStop: () => engine.stop(),
+      onNext: () => playlist.next(),
+      onEject: () => void openAudioFilesAction(),
+      onToggleShuffle: () => {
+        const shuffle = playlist.toggleShuffle();
+        void window.electronAPI.saveConfig({ shuffle });
+      },
+      onCycleRepeat: () => {
+        const repeatMode = playlist.cycleRepeat();
+        void window.electronAPI.saveConfig({ repeatMode });
+      },
+      onSeek: (sec) => engine.seek(sec),
+      onVolume: (pct) => {
+        engine.setVolume(pct / 100);
+        void window.electronAPI.saveConfig({ volume: pct });
+      },
+      onBalance: (pan) => {
+        engine.setBalance(pan);
+      },
+      onPreampChange: (db) => {
+        engine.setPreampGain(db);
+      },
+      onEqBandChange: (idx, db, commit) => {
+        engine.setBandGain(idx, db);
+        if (commit) {
+          void window.electronAPI.saveConfig({ eqPreset: 'custom', eqGains: engine.getEqGains() });
+        }
+      },
+      onEqToggle: () => {
+        const nextEnabled = !engine.isEqEnabled;
+        engine.setEqEnabled(nextEnabled);
+        classicView?.updateEq(nextEnabled, engine.getEqGains());
+        void window.electronAPI.saveConfig({ eqEnabled: nextEnabled });
+      },
+      onEqReset: () => {
+        const flat = [0, 0, 0, 0, 0, 0, 0, 0, 0, 0];
+        engine.setAllBandGains(flat);
+        classicView?.updateEq(engine.isEqEnabled, flat);
+        void window.electronAPI.saveConfig({ eqPreset: 'flat', eqGains: flat });
+      },
+      onEqPresetSelect: (presetId, gains) => {
+        engine.setAllBandGains(gains);
+        classicView?.updateEq(engine.isEqEnabled, gains);
+        void window.electronAPI.saveConfig({ eqPreset: presetId, eqGains: gains });
+      },
+      onPanelsVisibilityChange: (eqVisible, plVisible) => {
+        void window.electronAPI.setWindowPanels(eqVisible, plVisible);
+      },
+      onMinimize: () => window.electronAPI.minimizeWindow(),
+      onClose: () => window.electronAPI.closeWindow(),
+      onMiniMode: () => void toggleMiniMode(),
+    })
+  : null;
 
-// Controles de paneles superiores (EQ, LRC, Editor de Skin, MINI)
-btnEqPanel?.addEventListener('click', () => {
-  const isHidden = eqPanel?.classList.toggle('hidden');
-  btnEqPanel.classList.toggle('active', !isHidden);
-});
-
-btnLyricsPanel?.addEventListener('click', () => {
-  const isHidden = lyricsPanel?.classList.toggle('hidden');
-  btnLyricsPanel.classList.toggle('active', !isHidden);
-  if (!isHidden) {
-    void lyricsController?.loadForTrack(playlist.currentTrack);
+// Escalado proporcional fluido al redimensionar la ventana
+window.addEventListener('resize', () => {
+  if (!isMiniMode) {
+    classicView?.fitToWindowWidth();
   }
 });
 
-btnSkinEditor?.addEventListener('click', () => {
-  const isHidden = skinEditorPanel?.classList.toggle('hidden');
-  btnSkinEditor.classList.toggle('active', !isHidden);
-});
-
-btnMiniMode?.addEventListener('click', async () => {
-  isMiniMode = await window.electronAPI.setMiniMode(!isMiniMode);
-  document.body.classList.toggle('mini-mode', isMiniMode);
-  btnMiniMode.textContent = isMiniMode ? 'FULL' : 'MINI';
-  btnMiniMode.classList.toggle('active', isMiniMode);
-});
-
-btnMinimize?.addEventListener('click', () => window.electronAPI.minimizeWindow());
-btnClose?.addEventListener('click', () => window.electronAPI.closeWindow());
-
-// Cambio de skin
-btnTheme?.addEventListener('click', () => {
-  const nextTheme = themeManager.cycleTheme();
-  void window.electronAPI.saveConfig({ theme: nextTheme });
-  if (statusText) {
-    statusText.textContent = `SKIN ACTIVA: ${nextTheme.toUpperCase()}`;
-  }
-});
-
-// Editor de Skin personalizada en tiempo real
-function bindCustomSkinInput(
-  input: HTMLInputElement | HTMLSelectElement | null,
-  key: keyof CustomSkinConfig
-): void {
-  if (!input) return;
-  input.addEventListener('input', () => {
-    const updated = themeManager.updateCustomSkin({ [key]: input.value });
-    if (statusText) statusText.textContent = 'SKIN ACTIVA: CUSTOM';
-    void window.electronAPI.saveConfig({ theme: 'custom', customSkin: updated });
-  });
-}
-
-bindCustomSkinInput(colorBgShell, 'bgShell');
-bindCustomSkinInput(colorBgTitlebar, 'bgTitlebar');
-bindCustomSkinInput(colorBgLcd, 'bgLcd');
-bindCustomSkinInput(colorTextMain, 'textMain');
-bindCustomSkinInput(colorAccent, 'accent');
-bindCustomSkinInput(skinFontSelect, 'fontLcd');
-
-// Visualizador
-visualizerCanvas?.addEventListener('click', () => {
+// Visualizador (clic para alternar Barras / Onda / Off)
+visCanvas?.addEventListener('click', () => {
   if (!visualizer) return;
   const nextMode = visualizer.cycleMode();
   void window.electronAPI.saveConfig({ visualizerMode: nextMode });
-  if (statusText) {
-    statusText.textContent = `VISUALIZADOR: ${nextMode.toUpperCase()}`;
-  }
 });
 
-// Ecualizador
-btnEqToggle?.addEventListener('click', () => {
-  const nextEnabled = !engine.isEqEnabled;
-  engine.setEqEnabled(nextEnabled);
-  syncEqUI(nextEnabled, eqPresetSelect?.value ?? 'flat', engine.getEqGains());
-  void window.electronAPI.saveConfig({ eqEnabled: nextEnabled });
-});
-
-eqPresetSelect?.addEventListener('change', () => {
-  const presetId = eqPresetSelect.value;
-  const preset = EQ_PRESETS.find((p) => p.id === presetId);
-  if (!preset) return;
-
-  engine.setAllBandGains(preset.gains);
-  syncEqUI(engine.isEqEnabled, preset.id, preset.gains);
-  void window.electronAPI.saveConfig({ eqPreset: preset.id, eqGains: preset.gains });
-});
-
-btnEqReset?.addEventListener('click', () => {
-  const flat = EQ_PRESETS[0];
-  engine.setAllBandGains(flat.gains);
-  syncEqUI(engine.isEqEnabled, flat.id, flat.gains);
-  void window.electronAPI.saveConfig({ eqPreset: flat.id, eqGains: flat.gains });
-});
-
-// Biblioteca local y archivos
-btnFolder?.addEventListener('click', async () => {
-  if (statusText) statusText.textContent = 'ESCANEANDO CARPETA...';
-  const result = await window.electronAPI.selectMusicFolder();
-  if (!result) {
-    if (statusText) statusText.textContent = 'LISTO';
-    return;
-  }
-
-  playlist.setTracks(result.tracks, false);
-  if (statusText) {
-    statusText.textContent = `BIBLIOTECA CARGADA (${result.tracks.length} PISTAS)`;
-  }
-});
-
-btnOpen?.addEventListener('click', async () => {
-  const tracks = await window.electronAPI.openAudioFiles();
-  if (tracks.length === 0) return;
-  playlist.addTracks(tracks, !engine.hasTrack);
-});
-
-// Controles de reproducción (normal + mini-barra)
-function triggerPlayOrStartFirst(): void {
-  if (!engine.hasTrack && playlist.allTracks.length > 0) {
-    playlist.selectIndex(0);
-    return;
-  }
-  engine.togglePlay();
-}
-
-btnPlay?.addEventListener('click', () => {
-  if (!engine.hasTrack && playlist.allTracks.length > 0) {
-    playlist.selectIndex(0);
-    return;
-  }
-  void engine.play();
-});
-btnPause?.addEventListener('click', () => engine.pause());
-btnStop?.addEventListener('click', () => engine.stop());
-btnPrev?.addEventListener('click', () => playlist.previous());
-btnNext?.addEventListener('click', () => playlist.next());
-
+// Mini-barra
 miniPrev?.addEventListener('click', () => playlist.previous());
 miniPlay?.addEventListener('click', () => triggerPlayOrStartFirst());
 miniNext?.addEventListener('click', () => playlist.next());
+miniRestore?.addEventListener('click', () => void toggleMiniMode());
 
-btnShuffle?.addEventListener('click', () => {
-  const shuffle = playlist.toggleShuffle();
-  void window.electronAPI.saveConfig({ shuffle });
-});
+// Barra inferior de Playlist (Carpeta, Archivos, Buscador, Letras flotante, Skins flotante)
+btnFolder?.addEventListener('click', () => void selectFolderAction());
+btnOpen?.addEventListener('click', () => void openAudioFilesAction());
+btnLyrics?.addEventListener('click', () => void window.electronAPI.openFloatingWindow('lyrics'));
+btnSkins?.addEventListener('click', () => void window.electronAPI.openFloatingWindow('skins'));
 
-btnRepeat?.addEventListener('click', () => {
-  const repeatMode = playlist.cycleRepeat();
-  void window.electronAPI.saveConfig({ repeatMode });
-});
-
-// Barra de progreso
-seekBar?.addEventListener('input', () => {
-  isSeeking = true;
-  const preview = formatTime(Number(seekBar.value));
-  if (lcdTime) lcdTime.textContent = preview;
-  if (timeCurrent) timeCurrent.textContent = preview;
-});
-
-seekBar?.addEventListener('change', () => {
-  engine.seek(Number(seekBar.value));
-  isSeeking = false;
-});
-
-// Volumen y silencio
-volumeBar?.addEventListener('input', () => updateVolumeUI(Number(volumeBar.value)));
-volumeBar?.addEventListener('change', () => {
-  void window.electronAPI.saveConfig({ volume: Number(volumeBar.value) });
-});
-
-btnMute?.addEventListener('click', () => {
-  const muted = engine.toggleMute();
-  if (btnMute) btnMute.textContent = muted ? '🔇' : '🔊';
-});
-
-// Buscador
 searchInput?.addEventListener('input', () => {
   searchQuery = searchInput.value;
   renderPlaylist(playlist.allTracks, playlist.activeIndex);
 });
 
-// Drag & Drop
+// Drag & Drop de música y archivos .wsz
 let dragDepth = 0;
 
 playerShell?.addEventListener('dragenter', (event) => {
@@ -584,17 +294,22 @@ playerShell?.addEventListener('drop', async (event) => {
     .map((file) => window.electronAPI.getPathForFile(file))
     .filter((p) => Boolean(p));
 
-  if (paths.length === 0) return;
+  const wszPath = paths.find((p) => p.toLowerCase().endsWith('.wsz'));
+  if (wszPath) {
+    await window.electronAPI.importWszPath(wszPath);
+  }
 
-  if (statusText) statusText.textContent = 'LEYENDO ARCHIVOS ARRASTRADOS...';
-  const tracks = await window.electronAPI.readDroppedPaths(paths);
-  playlist.addTracks(tracks, !engine.hasTrack);
-  if (statusText) statusText.textContent = `AGREGADAS ${tracks.length} PISTAS`;
+  const audioPaths = paths.filter((p) => !p.toLowerCase().endsWith('.wsz'));
+  if (audioPaths.length > 0) {
+    const tracks = await window.electronAPI.readDroppedPaths(audioPaths);
+    playlist.addTracks(tracks, !engine.hasTrack);
+  }
 });
 
-// Atajos locales de teclado
+// Atajos locales
 window.addEventListener('keydown', (event) => {
-  if (document.activeElement === searchInput) return;
+  const tag = (document.activeElement as HTMLElement | null)?.tagName;
+  if (tag === 'INPUT' || tag === 'SELECT' || tag === 'TEXTAREA') return;
   if (!engine.hasTrack) return;
 
   if (event.code === 'Space') {
@@ -609,37 +324,44 @@ window.addEventListener('keydown', (event) => {
   }
 });
 
-// Atajos globales del sistema (funcionan aunque estés en otro programa o juego)
+// Eventos desde ventanas flotantes y atajos globales
 window.electronAPI.onShortcutAction((action: ShortcutAction) => {
-  if (action === 'play-pause') {
-    triggerPlayOrStartFirst();
-  } else if (action === 'next') {
-    playlist.next();
-  } else if (action === 'previous') {
-    playlist.previous();
-  } else if (action === 'stop') {
-    engine.stop();
-  }
+  if (action === 'play-pause') triggerPlayOrStartFirst();
+  else if (action === 'next') playlist.next();
+  else if (action === 'previous') playlist.previous();
+  else if (action === 'stop') engine.stop();
 });
 
-// Inicialización
+window.electronAPI.onSeekRequested((seconds: number) => {
+  engine.seek(seconds);
+});
+
+window.electronAPI.onSkinApplied((skin: WszSkinData | null) => {
+  applySkinOrDefault(skin);
+});
+
+// Arranque inicial
 async function bootstrap(): Promise<void> {
   const config = await window.electronAPI.loadConfig();
-  themeManager.apply(config.theme, config.customSkin);
-  syncSkinEditorInputs(config.customSkin);
-  updateVolumeUI(config.volume);
+  engine.setVolume(config.volume / 100);
+  classicView?.updateVolumeSprite(config.volume);
   playlist.setModes(config.shuffle, config.repeatMode);
 
   engine.setEqEnabled(config.eqEnabled);
   engine.setAllBandGains(config.eqGains);
-  syncEqUI(config.eqEnabled, config.eqPreset, config.eqGains);
+  classicView?.updateEq(config.eqEnabled, config.eqGains);
   visualizer?.setMode(config.visualizerMode);
 
+  if (config.activeWszSkinId) {
+    const skin = await window.electronAPI.loadWszSkin(config.activeWszSkinId);
+    applySkinOrDefault(skin);
+  } else {
+    applySkinOrDefault(null);
+  }
+
   if (config.musicFolder) {
-    if (statusText) statusText.textContent = 'CARGANDO TU BIBLIOTECA...';
     const tracks = await window.electronAPI.scanFolder(config.musicFolder);
     playlist.setTracks(tracks, false);
-    if (statusText) statusText.textContent = `BIBLIOTECA LISTA (${tracks.length} PISTAS)`;
   }
 }
 

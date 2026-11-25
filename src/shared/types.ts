@@ -1,17 +1,49 @@
-// Única fuente de verdad para los tipos compartidos entre Main, Preload y Renderer
+// Única fuente de verdad para los tipos compartidos entre Main, Preload y ventanas Renderer
 
-export type ThemeName = 'winamp-classic' | 'modern-dark' | 'minimal-blue' | 'custom';
 export type RepeatMode = 'off' | 'all' | 'one';
 export type VisualizerMode = 'bars' | 'wave' | 'off';
 export type ShortcutAction = 'play-pause' | 'next' | 'previous' | 'stop';
+export type FloatingWindowType = 'lyrics' | 'skins';
 
-export interface CustomSkinConfig {
-  bgShell: string;
-  bgTitlebar: string;
-  bgLcd: string;
-  textMain: string;
-  accent: string;
-  fontLcd: string;
+export interface WszSkinMeta {
+  id: string; // nombre del archivo .wsz guardado
+  name: string; // nombre legible sin extensión
+  filePath: string;
+}
+
+export interface WszPleditColors {
+  normal: string;
+  current: string;
+  normalBg: string;
+  selectedBg: string;
+  font: string;
+}
+
+export interface WszSkinSprites {
+  main?: string;
+  titlebar?: string;
+  cbuttons?: string;
+  posbar?: string;
+  volume?: string;
+  balance?: string;
+  shufrep?: string;
+  numbers?: string;
+  eqmain?: string;
+  pledit?: string;
+}
+
+export interface WszSkinData {
+  meta: WszSkinMeta;
+  sprites: WszSkinSprites;
+  pledit: WszPleditColors;
+  visColors: string[];
+}
+
+export interface MuseumSkinItem {
+  md5: string;
+  filename: string;
+  downloadUrl: string;
+  screenshotUrl: string;
 }
 
 export interface LyricLine {
@@ -34,16 +66,15 @@ export interface Track {
   title: string;
   artist: string;
   album: string;
-  duration: number; // en segundos
-  bitrate?: number; // en kbps (ej. 320)
-  sampleRate?: number; // en Hz (ej. 44100)
-  codec?: string; // ej. MP3, FLAC, WAV
+  duration: number;
+  bitrate?: number;
+  sampleRate?: number;
+  codec?: string;
 }
 
 export interface AppConfig {
   musicFolder: string | null;
-  theme: ThemeName;
-  customSkin: CustomSkinConfig;
+  activeWszSkinId: string | null;
   volume: number; // 0 a 100
   shuffle: boolean;
   repeatMode: RepeatMode;
@@ -54,16 +85,48 @@ export interface AppConfig {
 }
 
 export interface ElectronAPI {
+  // Control de ventana actual (principal o flotante)
   minimizeWindow: () => void;
   closeWindow: () => void;
+  toggleAlwaysOnTop: () => Promise<boolean>;
   setMiniMode: (enabled: boolean) => Promise<boolean>;
+  setWindowPanels: (eqVisible: boolean, plVisible: boolean) => Promise<void>;
+  openFloatingWindow: (type: FloatingWindowType) => Promise<void>;
+
+  // Biblioteca local y archivos
   openAudioFiles: () => Promise<Track[]>;
   selectMusicFolder: () => Promise<{ folderPath: string; tracks: Track[] } | null>;
   scanFolder: (folderPath: string) => Promise<Track[]>;
   readDroppedPaths: (paths: string[]) => Promise<Track[]>;
   getPathForFile: (file: File) => string;
+
+  // Persistencia
   loadConfig: () => Promise<AppConfig>;
   saveConfig: (partial: Partial<AppConfig>) => Promise<AppConfig>;
+
+  // Letras y sincronización entre ventanas
   fetchLyrics: (track: Pick<Track, 'title' | 'artist' | 'album' | 'duration'>) => Promise<LyricsResult>;
+  broadcastTrack: (track: Track | null) => void;
+  broadcastTime: (currentTime: number) => void;
+  broadcastPalette: (palette: WszPleditColors) => void;
+  requestSeekFromLyrics: (seconds: number) => void;
+  getSyncState: () => Promise<{ track: Track | null; palette: WszPleditColors; activeSkinId: string | null }>;
+
+  // Eventos recibidos desde Main
   onShortcutAction: (callback: (action: ShortcutAction) => void) => void;
+  onTrackChanged: (callback: (track: Track | null) => void) => void;
+  onTimeUpdated: (callback: (currentTime: number) => void) => void;
+  onPaletteUpdated: (callback: (palette: WszPleditColors) => void) => void;
+  onSeekRequested: (callback: (seconds: number) => void) => void;
+  onSkinApplied: (callback: (skin: WszSkinData | null) => void) => void;
+
+  // Motor de Skins .wsz + Webamp Skin Museum
+  listWszSkins: () => Promise<WszSkinMeta[]>;
+  importWszDialog: () => Promise<WszSkinData | null>;
+  importWszPath: (filePath: string) => Promise<WszSkinData | null>;
+  loadWszSkin: (skinId: string) => Promise<WszSkinData | null>;
+  deleteWszSkin: (skinId: string) => Promise<boolean>;
+  selectWszSkin: (skinId: string | null) => Promise<WszSkinData | null>;
+  searchMuseumSkins: (query: string) => Promise<MuseumSkinItem[]>;
+  downloadMuseumSkin: (downloadUrl: string, filename: string) => Promise<WszSkinData | null>;
 }
