@@ -1,13 +1,46 @@
 {
   "name": "reproductor-de-musica",
   "version": "1.0.0",
-  "description": "",
+  "description": "Exum — Reproductor de audio estilo Winamp moderno con skins .wsz, ecualizador de 10 bandas, letras sincronizadas y fuentes externas",
   "main": "dist/main.js",
   "scripts": {
     "build:main": "tsc -p tsconfig.main.json",
-    "build:renderer": "tsc -p tsconfig.renderer.json",
+    "build:renderer": "tsc -p tsconfig.renderer.json && node -e \"require('fs').writeFileSync('dist/renderer/package.json', JSON.stringify({type:'module'}))\"",
     "build": "npm run build:main && npm run build:renderer",
-    "start": "npm run build && electron ."
+    "start": "npm run build && electron .",
+    "test": "npm run build && node --test tests/exum.test.mjs",
+    "dist": "npm run build && electron-builder --win portable",
+    "dist:installer": "npm run build && electron-builder --win nsis"
+  },
+  "build": {
+    "appId": "com.exum.player",
+    "productName": "Exum",
+    "directories": {
+      "output": "release"
+    },
+    "files": [
+      "dist/**/*",
+      "assets/**/*",
+      "styles/**/*",
+      "index.html",
+      "lyrics.html",
+      "skins.html",
+      "sources.html",
+      "package.json"
+    ],
+    "win": {
+      "icon": "assets/icon.ico",
+      "signAndEditExecutable": false,
+      "target": [
+        {
+          "target": "portable",
+          "arch": ["x64"]
+        }
+      ]
+    },
+    "portable": {
+      "artifactName": "Exum-${version}-portable.exe"
+    }
   },
   "keywords": [],
   "author": "",
@@ -17,6 +50,7 @@
     "@types/adm-zip": "^0.5.8",
     "@types/node": "^26.6.10",
     "electron": "^45.5.0",
+    "electron-builder": "^26.18.0",
     "typescript": "^7.0.2"
   },
   "dependencies": {

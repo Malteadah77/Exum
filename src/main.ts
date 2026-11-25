@@ -107,6 +107,7 @@ let activeSkinId: string | null = null;
 
 function createWindow(): void {
   const initialBaseH = computeBaseHeight('open', 'open');
+  const appIcon = path.join(__dirname, '../assets/icon.png');
   mainWindow = new BrowserWindow({
     width: Math.round(BASE_W * currentScale),
     height: Math.round(initialBaseH * currentScale),
@@ -116,6 +117,7 @@ function createWindow(): void {
     maxHeight: Math.round(initialBaseH * MAX_SCALE),
     frame: false,
     useContentSize: true,
+    icon: appIcon,
     backgroundColor: '#0e090b',
     webPreferences: {
       preload: path.join(__dirname, 'preload.js'),
@@ -146,6 +148,7 @@ function createWindow(): void {
 }
 
 function openFloatingWindow(type: FloatingWindowType): void {
+  const appIcon = path.join(__dirname, '../assets/icon.png');
   if (type === 'lyrics') {
     if (lyricsWindow && !lyricsWindow.isDestroyed()) {
       lyricsWindow.focus();
@@ -157,6 +160,7 @@ function openFloatingWindow(type: FloatingWindowType): void {
       minWidth: 260,
       minHeight: 240,
       frame: false,
+      icon: appIcon,
       backgroundColor: currentPalette.normalBg,
       webPreferences: {
         preload: path.join(__dirname, 'preload.js'),
@@ -182,6 +186,7 @@ function openFloatingWindow(type: FloatingWindowType): void {
       minWidth: 360,
       minHeight: 360,
       frame: false,
+      icon: appIcon,
       backgroundColor: currentPalette.normalBg,
       webPreferences: {
         preload: path.join(__dirname, 'preload.js'),
@@ -207,6 +212,7 @@ function openFloatingWindow(type: FloatingWindowType): void {
       minWidth: 340,
       minHeight: 340,
       frame: false,
+      icon: appIcon,
       backgroundColor: currentPalette.normalBg,
       webPreferences: {
         preload: path.join(__dirname, 'preload.js'),
