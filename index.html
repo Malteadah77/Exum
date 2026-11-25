@@ -1,0 +1,87 @@
+<!DOCTYPE html>
+<html lang="es" data-theme="winamp-classic">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Mi Reproductor</title>
+  <link rel="stylesheet" href="./styles/themes.css" />
+  <link rel="stylesheet" href="./styles/main.css" />
+</head>
+<body>
+  <div class="player-shell">
+    <!-- Barra superior arrastrable -->
+    <header class="titlebar">
+      <div class="titlebar-brand">
+        <span class="brand-dot"></span>
+        <span class="brand-title">AMP STUDIO v0.1</span>
+      </div>
+      <div class="titlebar-actions">
+        <button id="btn-theme" class="win-btn" title="Cambiar skin">SKIN</button>
+        <button id="btn-minimize" class="win-btn" title="Minimizar">_</button>
+        <button id="btn-close" class="win-btn win-btn-close" title="Cerrar">×</button>
+      </div>
+    </header>
+
+    <!-- Área principal del reproductor -->
+    <main class="display-area">
+      <!-- Pantalla LCD -->
+      <div class="lcd-screen">
+        <div id="lcd-time" class="lcd-time">00:00</div>
+        <div class="lcd-info">
+          <div id="track-title" class="lcd-track">NINGUNA CANCIÓN CARGADA</div>
+          <div id="status-text" class="lcd-status">PRESIONA ABRIR PARA ELEGIR UN AUDIO</div>
+        </div>
+      </div>
+
+      <!-- Barra de progreso (Seek bar) -->
+      <div class="seek-row">
+        <span id="time-current" class="time-label">00:00</span>
+        <input
+          id="seek-bar"
+          class="range-slider"
+          type="range"
+          min="0"
+          max="0"
+          step="0.1"
+          value="0"
+          disabled
+        />
+        <span id="time-total" class="time-label">00:00</span>
+      </div>
+
+      <!-- Controles de reproducción + Volumen -->
+      <div class="controls-bar">
+        <div class="transport-group">
+          <button id="btn-open" class="ctrl-btn ctrl-btn-open" title="Abrir archivo de audio">
+            📂 ABRIR
+          </button>
+          <button id="btn-play" class="ctrl-btn ctrl-btn-primary" title="Reproducir (Espacio)" disabled>
+            ▶
+          </button>
+          <button id="btn-pause" class="ctrl-btn" title="Pausar (Espacio)" disabled>
+            ⏸
+          </button>
+          <button id="btn-stop" class="ctrl-btn" title="Detener" disabled>
+            ⏹
+          </button>
+        </div>
+
+        <div class="volume-group">
+          <button id="btn-mute" class="ctrl-btn ctrl-btn-icon" title="Silenciar">🔊</button>
+          <input
+            id="volume-bar"
+            class="range-slider volume-slider"
+            type="range"
+            min="0"
+            max="100"
+            value="80"
+          />
+          <span id="volume-value" class="time-label">80%</span>
+        </div>
+      </div>
+    </main>
+  </div>
+
+  <script type="module" src="./dist/renderer/app.js"></script>
+</body>
+</html>

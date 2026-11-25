@@ -1,0 +1,44 @@
+/* Sistema de Skins basado en Variables CSS.
+   Cambiar de skin = cambiar el atributo data-theme en <html> */
+
+:root[data-theme="winamp-classic"] {
+  --bg-shell: #1e2128;
+  --bg-titlebar: #2c313c;
+  --bg-lcd: #0b0f0c;
+  --border-color: #3f4654;
+  --text-main: #d8dee9;
+  --text-lcd: #00ff66;
+  --text-muted: #7a869a;
+  --accent: #00ff66;
+  --btn-bg: #2e3440;
+  --btn-hover: #3b4252;
+  --font-lcd: 'Consolas', 'Courier New', monospace;
+}
+
+:root[data-theme="modern-dark"] {
+  --bg-shell: #121216;
+  --bg-titlebar: #18181f;
+  --bg-lcd: #1c1c26;
+  --border-color: #2a2a38;
+  --text-main: #f1f1f5;
+  --text-lcd: #38bdf8;
+  --text-muted: #8b8ca3;
+  --accent: #38bdf8;
+  --btn-bg: #232330;
+  --btn-hover: #313144;
+  --font-lcd: 'Segoe UI', system-ui, sans-serif;
+}
+
+:root[data-theme="minimal-blue"] {
+  --bg-shell: #38bdf8;
+  --bg-titlebar: #18181f;
+  --bg-lcd: #1c1c26;
+  --border-color: #2a2a38;
+  --text-main: #f1f1f5;
+  --text-lcd: #38bdf8;
+  --text-muted: #8b8ca3;
+  --accent: #38bdf8;
+  --btn-bg: #232330;
+  --btn-hover: #313144;
+  --font-lcd: 'JetBrains Mono', system-ui, sans-serif;
+}
