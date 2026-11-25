@@ -17,18 +17,34 @@
     <header class="titlebar">
       <div class="titlebar-brand">
         <span class="brand-dot"></span>
-        <span class="brand-title">EXUM v0.3</span>
+        <span class="brand-title">EXUM v0.4</span>
       </div>
       <div class="titlebar-actions">
-        <button id="btn-eq-panel" class="win-btn" title="Mostrar / ocultar ecualizador">EQ</button>
-        <button id="btn-theme" class="win-btn" title="Cambiar skin">SKIN</button>
+        <button id="btn-eq-panel" class="win-btn normal-only" title="Mostrar / ocultar ecualizador">EQ</button>
+        <button id="btn-lyrics-panel" class="win-btn normal-only" title="Letras sincronizadas (LRCLIB)">LRC</button>
+        <button id="btn-skin-editor" class="win-btn normal-only" title="Editor de skin personalizada">🎨</button>
+        <button id="btn-theme" class="win-btn normal-only" title="Cambiar skin">SKIN</button>
+        <button id="btn-mini-mode" class="win-btn" title="Modo mini-barra flotante (siempre visible)">MINI</button>
         <button id="btn-minimize" class="win-btn" title="Minimizar">_</button>
         <button id="btn-close" class="win-btn win-btn-close" title="Cerrar">×</button>
       </div>
     </header>
 
+    <!-- Vista compacta exclusiva para Modo Mini-Barra Flotante -->
+    <section id="mini-bar" class="mini-bar">
+      <div class="mini-info">
+        <span id="mini-time" class="mini-time">00:00</span>
+        <span id="mini-title" class="mini-title">Ninguna canción cargada</span>
+      </div>
+      <div class="mini-controls">
+        <button id="mini-prev" class="ctrl-btn" title="Anterior">⏮</button>
+        <button id="mini-play" class="ctrl-btn ctrl-btn-primary" title="Play / Pause">⏯</button>
+        <button id="mini-next" class="ctrl-btn" title="Siguiente">⏭</button>
+      </div>
+    </section>
+
     <!-- Módulo superior: Pantalla LCD + Visualizador + Controles -->
-    <section class="deck-area">
+    <section class="deck-area normal-only">
       <div class="lcd-screen">
         <div class="lcd-left">
           <div id="lcd-time" class="lcd-time">00:00</div>
@@ -67,11 +83,11 @@
       <!-- Controles de reproducción + Volumen -->
       <div class="controls-bar">
         <div class="transport-group">
-          <button id="btn-prev" class="ctrl-btn" title="Anterior" disabled>⏮</button>
-          <button id="btn-play" class="ctrl-btn ctrl-btn-primary" title="Reproducir (Espacio)" disabled>▶</button>
-          <button id="btn-pause" class="ctrl-btn" title="Pausar (Espacio)" disabled>⏸</button>
+          <button id="btn-prev" class="ctrl-btn" title="Anterior (Ctrl+Alt+←)" disabled>⏮</button>
+          <button id="btn-play" class="ctrl-btn ctrl-btn-primary" title="Reproducir (Espacio / Ctrl+Alt+Espacio)" disabled>▶</button>
+          <button id="btn-pause" class="ctrl-btn" title="Pausar" disabled>⏸</button>
           <button id="btn-stop" class="ctrl-btn" title="Detener" disabled>⏹</button>
-          <button id="btn-next" class="ctrl-btn" title="Siguiente" disabled>⏭</button>
+          <button id="btn-next" class="ctrl-btn" title="Siguiente (Ctrl+Alt+→)" disabled>⏭</button>
           <button id="btn-shuffle" class="ctrl-btn" title="Aleatorio">🔀</button>
           <button id="btn-repeat" class="ctrl-btn" title="Repetir: desactivado">🔁</button>
         </div>
@@ -91,8 +107,8 @@
       </div>
     </section>
 
-    <!-- Módulo central colapsable: Ecualizador de 10 bandas (estilo Winamp) -->
-    <section id="eq-panel" class="eq-panel hidden">
+    <!-- Panel colapsable: Ecualizador de 10 bandas -->
+    <section id="eq-panel" class="eq-panel hidden normal-only">
       <div class="eq-header">
         <div class="eq-header-left">
           <button id="btn-eq-toggle" class="tool-btn eq-toggle-active" title="Activar o desactivar ecualizador">
@@ -112,12 +128,57 @@
           RESET
         </button>
       </div>
-
       <div id="eq-bands-container" class="eq-bands"></div>
     </section>
 
+    <!-- Panel colapsable: Editor de Skin Personalizada -->
+    <section id="skin-editor-panel" class="skin-editor-panel hidden normal-only">
+      <div class="skin-editor-header">
+        <span class="panel-label">🎨 EDITOR DE SKIN PERSONALIZADA</span>
+        <select id="skin-font-select" class="eq-select" title="Fuente de la pantalla LCD">
+          <option value="'Consolas', monospace">Consolas (Retro)</option>
+          <option value="'JetBrains Mono', monospace">JetBrains Mono</option>
+          <option value="'Courier New', monospace">Courier New</option>
+          <option value="'Segoe UI', system-ui, sans-serif">Segoe UI (Moderna)</option>
+        </select>
+      </div>
+      <div class="skin-pickers">
+        <label class="color-field">
+          <span>Fondo</span>
+          <input id="color-bg-shell" type="color" value="#14111d" />
+        </label>
+        <label class="color-field">
+          <span>Barra</span>
+          <input id="color-bg-titlebar" type="color" value="#1e192b" />
+        </label>
+        <label class="color-field">
+          <span>LCD</span>
+          <input id="color-bg-lcd" type="color" value="#0c0914" />
+        </label>
+        <label class="color-field">
+          <span>Texto</span>
+          <input id="color-text-main" type="color" value="#f4f0ff" />
+        </label>
+        <label class="color-field">
+          <span>Acento</span>
+          <input id="color-accent" type="color" value="#c084fc" />
+        </label>
+      </div>
+    </section>
+
+    <!-- Panel colapsable: Letras Sincronizadas -->
+    <section id="lyrics-panel" class="lyrics-panel hidden normal-only">
+      <div class="lyrics-header">
+        <span class="panel-label">🎤 LETRAS SINCRONIZADAS (LRCLIB)</span>
+        <span class="lyrics-hint">Clic en una línea para saltar</span>
+      </div>
+      <div id="lyrics-content" class="lyrics-content">
+        <div class="lyrics-message">Reproduce una canción para buscar su letra.</div>
+      </div>
+    </section>
+
     <!-- Módulo inferior: Biblioteca y Playlist -->
-    <section class="playlist-section">
+    <section class="playlist-section normal-only">
       <div class="playlist-toolbar">
         <div class="playlist-actions">
           <button id="btn-folder" class="tool-btn" title="Elegir carpeta dedicada de música">
