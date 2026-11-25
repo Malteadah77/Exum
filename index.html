@@ -5,7 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <meta
     http-equiv="Content-Security-Policy"
-    content="default-src 'self'; media-src 'self' file:; img-src 'self' data:; style-src 'self' 'unsafe-inline';"
+    content="default-src 'self'; media-src 'self' file: http: https:; img-src 'self' data:; style-src 'self' 'unsafe-inline';"
   />
   <title>Exum</title>
   <link rel="stylesheet" href="./styles/classic.css" />
@@ -31,7 +31,7 @@
       <!-- 1. Main Deck (275x116) -->
       <div class="wsz-main-deck">
         <div class="wsz-titlebar">
-          <span class="wsz-fallback-brand">EXUM v0.5</span>
+          <span class="wsz-fallback-brand">EXUM v0.6</span>
           <button id="wsz-win-min" class="wsz-win-btn" title="Minimizar">_</button>
           <button id="wsz-win-shade" class="wsz-win-btn" title="Modo mini-barra flotante">▬</button>
           <button id="wsz-win-close" class="wsz-win-btn" title="Cerrar">×</button>
@@ -123,6 +123,7 @@
         <button id="btn-folder" class="pl-btn" title="Elegir carpeta dedicada de música">📁</button>
         <button id="btn-open" class="pl-btn" title="Agregar archivos sueltos">+</button>
         <input id="search-input" class="pl-search" type="text" placeholder="Buscar..." />
+        <button id="btn-sources" class="pl-btn" title="Radios / Streams URL y Spotify">NET</button>
         <button id="btn-lyrics" class="pl-btn" title="Abrir ventana flotante de Letras">LRC</button>
         <button id="btn-skins" class="pl-btn" title="Abrir gestor y museo de Skins .wsz">SKINS</button>
       </div>

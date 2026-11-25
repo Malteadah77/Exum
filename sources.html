@@ -1,0 +1,65 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta
+    http-equiv="Content-Security-Policy"
+    content="default-src 'self'; style-src 'self' 'unsafe-inline';"
+  />
+  <title>Exum — Fuentes Externas</title>
+  <link rel="stylesheet" href="./styles/floating.css" />
+</head>
+<body>
+  <div class="float-shell">
+    <header class="float-titlebar">
+      <span class="float-title">🌐 EXUM — FUENTES EXTERNAS (STREAMS & SPOTIFY)</span>
+      <div class="float-actions">
+        <button id="btn-pin" class="float-btn" title="Mantener siempre visible">📌</button>
+        <button id="btn-min" class="float-btn" title="Minimizar">_</button>
+        <button id="btn-close" class="float-btn float-btn-close" title="Cerrar">×</button>
+      </div>
+    </header>
+
+    <main class="float-body">
+      <div class="tabs-bar">
+        <button id="tab-streams" class="float-btn active">📻 Radios & Streams URL</button>
+        <button id="tab-spotify" class="float-btn">🎵 Spotify (API Oficial)</button>
+      </div>
+
+      <!-- Pestaña 1: Streams y Radios por URL -->
+      <section id="panel-streams" class="tab-panel">
+        <div class="form-stack">
+          <div class="search-row">
+            <input id="stream-name" class="float-input" type="text" placeholder="Nombre de la radio o audio..." />
+          </div>
+          <div class="search-row">
+            <input id="stream-url" class="float-input" type="url" placeholder="https://... (URL directa MP3 / AAC / Icecast)" />
+            <button id="btn-add-stream" class="float-btn">+ Agregar</button>
+          </div>
+        </div>
+        <div id="streams-list" class="source-list"></div>
+      </section>
+
+      <!-- Pestaña 2: Spotify Oficial (OAuth 2.0 PKCE) -->
+      <section id="panel-spotify" class="tab-panel hidden">
+        <div class="hint-box">
+          Crea una app gratis en <strong>developer.spotify.com</strong> con Redirect URI
+          <code>http://127.0.0.1:8888/callback</code> y pega abajo tu <strong>Client ID</strong>.
+        </div>
+        <div class="search-row">
+          <input id="spotify-client-id" class="float-input" type="text" placeholder="Tu Spotify Client ID..." />
+          <button id="btn-spotify-connect" class="float-btn">Vincular</button>
+          <button id="btn-spotify-disconnect" class="float-btn hidden">Salir</button>
+        </div>
+        <div id="spotify-status" class="section-title">No vinculado</div>
+        <div id="spotify-list" class="source-list">
+          <div class="lyrics-message">Vincula tu cuenta de Spotify para ver tus playlists.</div>
+        </div>
+      </section>
+    </main>
+  </div>
+
+  <script type="module" src="./dist/renderer/sourcesWindow.js"></script>
+</body>
+</html>

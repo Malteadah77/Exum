@@ -146,6 +146,9 @@ export class AudioEngine {
 
   public load(fileUrl: string, title: string): void {
     this.currentTitle = title;
+    const isRemote = fileUrl.startsWith('http://') || fileUrl.startsWith('https://');
+    // Permite que streams HTTP/HTTPS con CORS pasen por el Ecualizador y Visualizador Web Audio
+    this.audio.crossOrigin = isRemote ? 'anonymous' : null;
     this.audio.src = fileUrl;
     this.audio.load();
     this.setState('stopped');

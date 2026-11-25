@@ -1,8 +1,15 @@
-import { app, BrowserWindow, dialog, globalShortcut, ipcMain, Rectangle } from 'electron';
+import { app, BrowserWindow, dialog, globalShortcut, ipcMain, Rectangle, shell } from 'electron';
 import * as path from 'path';
 import { loadConfig, saveConfig } from './main/configStore';
 import { readTracksFromPaths, scanFolder } from './main/libraryScanner';
 import { fetchLyrics } from './main/lyricsService';
+import {
+  connectSpotify,
+  disconnectSpotify,
+  getSpotifyPlaylistTracks,
+  getSpotifyState,
+  listSpotifyPlaylists,
+} from './main/spotifyService';
 import {
   DEFAULT_PLEDIT,
   deleteSavedWszSkin,
@@ -24,6 +31,7 @@ import {
 let mainWindow: BrowserWindow | null = null;
 let lyricsWindow: BrowserWindow | null = null;
 let skinsWindow: BrowserWindow | null = null;
+let sourcesWindow: BrowserWindow | null = null;
 
 const BASE_W = 275;
 const BASE_H_MAIN = 116;
@@ -99,6 +107,7 @@ function createWindow(): void {
   mainWindow.on('closed', () => {
     lyricsWindow?.close();
     skinsWindow?.close();
+    sourcesWindow?.close();
     mainWindow = null;
   });
 }
@@ -151,6 +160,31 @@ function openFloatingWindow(type: FloatingWindowType): void {
     skinsWindow.on('closed', () => {
       skinsWindow = null;
     });
+    return;
+  }
+
+  if (type === 'sources') {
+    if (sourcesWindow && !sourcesWindow.isDestroyed()) {
+      sourcesWindow.focus();
+      return;
+    }
+    sourcesWindow = new BrowserWindow({
+      width: 480,
+      height: 500,
+      minWidth: 340,
+      minHeight: 340,
+      frame: false,
+      backgroundColor: currentPalette.normalBg,
+      webPreferences: {
+        preload: path.join(__dirname, 'preload.js'),
+        contextIsolation: true,
+        nodeIntegration: false,
+      },
+    });
+    sourcesWindow.loadFile(path.join(__dirname, '../sources.html'));
+    sourcesWindow.on('closed', () => {
+      sourcesWindow = null;
+    });
   }
 }
 
@@ -160,6 +194,9 @@ function broadcastToFloating(channel: string, payload: unknown): void {
   }
   if (skinsWindow && !skinsWindow.isDestroyed()) {
     skinsWindow.webContents.send(channel, payload);
+  }
+  if (sourcesWindow && !sourcesWindow.isDestroyed()) {
+    sourcesWindow.webContents.send(channel, payload);
   }
 }
 
@@ -276,6 +313,30 @@ ipcMain.on('lyrics:seek', (_event, seconds: number) => {
     mainWindow.webContents.send('lyrics:seek', seconds);
   }
 });
+
+ipcMain.on('external:addTrack', (_event, track: Track, autoPlay: boolean) => {
+  if (mainWindow && !mainWindow.isDestroyed()) {
+    mainWindow.webContents.send('external:trackReceived', track, autoPlay);
+  }
+});
+
+ipcMain.handle('shell:openExternal', async (_event, url: string) => {
+  if (typeof url === 'string' && (url.startsWith('https://') || url.startsWith('http://'))) {
+    await shell.openExternal(url);
+  }
+});
+
+// Spotify Oficial (OAuth 2.0 PKCE)
+ipcMain.handle('spotify:state', () => getSpotifyState());
+ipcMain.handle('spotify:connect', async (_event, clientId: string) => {
+  await saveConfig({ spotifyClientId: clientId.trim() || null });
+  return connectSpotify(clientId);
+});
+ipcMain.handle('spotify:disconnect', () => disconnectSpotify());
+ipcMain.handle('spotify:playlists', async () => listSpotifyPlaylists());
+ipcMain.handle('spotify:playlistTracks', async (_event, playlistId: string) =>
+  getSpotifyPlaylistTracks(playlistId)
+);
 
 ipcMain.handle('sync:getState', () => ({
   track: currentTrack,

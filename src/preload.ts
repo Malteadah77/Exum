@@ -6,6 +6,9 @@ import {
   LyricsResult,
   MuseumSkinItem,
   ShortcutAction,
+  SpotifyAuthState,
+  SpotifyPlaylistItem,
+  SpotifyTrackItem,
   Track,
   WszPleditColors,
   WszSkinData,
@@ -22,6 +25,8 @@ const api: ElectronAPI = {
     ipcRenderer.invoke('window:setPanels', eqVisible, plVisible) as Promise<void>,
   openFloatingWindow: (type: FloatingWindowType) =>
     ipcRenderer.invoke('window:openFloating', type) as Promise<void>,
+  openExternalUrl: (url: string) =>
+    ipcRenderer.invoke('shell:openExternal', url) as Promise<void>,
 
   openAudioFiles: () => ipcRenderer.invoke('dialog:openAudio') as Promise<Track[]>,
   selectMusicFolder: () =>
@@ -42,6 +47,8 @@ const api: ElectronAPI = {
   broadcastTime: (currentTime: number) => ipcRenderer.send('sync:time', currentTime),
   broadcastPalette: (palette: WszPleditColors) => ipcRenderer.send('sync:palette', palette),
   requestSeekFromLyrics: (seconds: number) => ipcRenderer.send('lyrics:seek', seconds),
+  sendExternalTrack: (track: Track, autoPlay: boolean) =>
+    ipcRenderer.send('external:addTrack', track, autoPlay),
   getSyncState: () =>
     ipcRenderer.invoke('sync:getState') as Promise<{
       track: Track | null;
@@ -73,6 +80,12 @@ const api: ElectronAPI = {
     ipcRenderer.removeAllListeners('wsz:skinApplied');
     ipcRenderer.on('wsz:skinApplied', (_event, skin: WszSkinData | null) => callback(skin));
   },
+  onExternalTrackReceived: (callback: (track: Track, autoPlay: boolean) => void) => {
+    ipcRenderer.removeAllListeners('external:trackReceived');
+    ipcRenderer.on('external:trackReceived', (_event, track: Track, autoPlay: boolean) =>
+      callback(track, autoPlay)
+    );
+  },
 
   listWszSkins: () => ipcRenderer.invoke('wsz:list') as Promise<WszSkinMeta[]>,
   importWszDialog: () => ipcRenderer.invoke('wsz:importDialog') as Promise<WszSkinData | null>,
@@ -80,14 +93,22 @@ const api: ElectronAPI = {
     ipcRenderer.invoke('wsz:importPath', filePath) as Promise<WszSkinData | null>,
   loadWszSkin: (skinId: string) =>
     ipcRenderer.invoke('wsz:load', skinId) as Promise<WszSkinData | null>,
-  deleteWszSkin: (skinId: string) =>
-    ipcRenderer.invoke('wsz:delete', skinId) as Promise<boolean>,
+  deleteWszSkin: (skinId: string) => ipcRenderer.invoke('wsz:delete', skinId) as Promise<boolean>,
   selectWszSkin: (skinId: string | null) =>
     ipcRenderer.invoke('wsz:select', skinId) as Promise<WszSkinData | null>,
   searchMuseumSkins: (query: string) =>
     ipcRenderer.invoke('wsz:searchMuseum', query) as Promise<MuseumSkinItem[]>,
   downloadMuseumSkin: (downloadUrl: string, filename: string) =>
     ipcRenderer.invoke('wsz:downloadMuseum', downloadUrl, filename) as Promise<WszSkinData | null>,
+
+  spotifyGetState: () => ipcRenderer.invoke('spotify:state') as Promise<SpotifyAuthState>,
+  spotifyConnect: (clientId: string) =>
+    ipcRenderer.invoke('spotify:connect', clientId) as Promise<SpotifyAuthState>,
+  spotifyDisconnect: () => ipcRenderer.invoke('spotify:disconnect') as Promise<SpotifyAuthState>,
+  spotifyListPlaylists: () =>
+    ipcRenderer.invoke('spotify:playlists') as Promise<SpotifyPlaylistItem[]>,
+  spotifyGetPlaylistTracks: (playlistId: string) =>
+    ipcRenderer.invoke('spotify:playlistTracks', playlistId) as Promise<SpotifyTrackItem[]>,
 };
 
 contextBridge.exposeInMainWorld('electronAPI', api);

@@ -29,6 +29,7 @@ const playlistCount = document.getElementById('playlist-count');
 const searchInput = document.getElementById('search-input') as HTMLInputElement | null;
 const btnFolder = document.getElementById('btn-folder');
 const btnOpen = document.getElementById('btn-open');
+const btnSources = document.getElementById('btn-sources');
 const btnLyrics = document.getElementById('btn-lyrics');
 const btnSkins = document.getElementById('btn-skins');
 
@@ -113,7 +114,7 @@ function renderPlaylist(tracks: Track[], activeIndex: number): void {
 
     const dur = document.createElement('span');
     dur.className = 'playlist-row-dur';
-    dur.textContent = formatTime(track.duration);
+    dur.textContent = track.isLive ? 'LIVE' : formatTime(track.duration);
 
     row.append(title, dur);
     row.addEventListener('dblclick', () => playlist.selectIndex(index));
@@ -252,9 +253,10 @@ miniPlay?.addEventListener('click', () => triggerPlayOrStartFirst());
 miniNext?.addEventListener('click', () => playlist.next());
 miniRestore?.addEventListener('click', () => void toggleMiniMode());
 
-// Barra inferior de Playlist (Carpeta, Archivos, Buscador, Letras flotante, Skins flotante)
+// Barra inferior de Playlist (Carpeta, Archivos, Buscador, Fuentes NET, Letras, Skins)
 btnFolder?.addEventListener('click', () => void selectFolderAction());
 btnOpen?.addEventListener('click', () => void openAudioFilesAction());
+btnSources?.addEventListener('click', () => void window.electronAPI.openFloatingWindow('sources'));
 btnLyrics?.addEventListener('click', () => void window.electronAPI.openFloatingWindow('lyrics'));
 btnSkins?.addEventListener('click', () => void window.electronAPI.openFloatingWindow('skins'));
 
@@ -338,6 +340,10 @@ window.electronAPI.onSeekRequested((seconds: number) => {
 
 window.electronAPI.onSkinApplied((skin: WszSkinData | null) => {
   applySkinOrDefault(skin);
+});
+
+window.electronAPI.onExternalTrackReceived((track: Track, autoPlay: boolean) => {
+  playlist.addTracks([track], autoPlay);
 });
 
 // Arranque inicial
