@@ -3,17 +3,21 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Mi Reproductor</title>
+  <meta
+    http-equiv="Content-Security-Policy"
+    content="default-src 'self'; media-src 'self' file:; style-src 'self' 'unsafe-inline';"
+  />
+  <title>Exum</title>
   <link rel="stylesheet" href="./styles/themes.css" />
   <link rel="stylesheet" href="./styles/main.css" />
 </head>
 <body>
-  <div class="player-shell">
+  <div id="player-shell" class="player-shell">
     <!-- Barra superior arrastrable -->
     <header class="titlebar">
       <div class="titlebar-brand">
         <span class="brand-dot"></span>
-        <span class="brand-title">AMP STUDIO v0.1</span>
+        <span class="brand-title">EXUM v0.2</span>
       </div>
       <div class="titlebar-actions">
         <button id="btn-theme" class="win-btn" title="Cambiar skin">SKIN</button>
@@ -22,18 +26,18 @@
       </div>
     </header>
 
-    <!-- Área principal del reproductor -->
-    <main class="display-area">
-      <!-- Pantalla LCD -->
+    <!-- Módulo superior: Pantalla LCD y Controles -->
+    <section class="deck-area">
       <div class="lcd-screen">
         <div id="lcd-time" class="lcd-time">00:00</div>
         <div class="lcd-info">
           <div id="track-title" class="lcd-track">NINGUNA CANCIÓN CARGADA</div>
-          <div id="status-text" class="lcd-status">PRESIONA ABRIR PARA ELEGIR UN AUDIO</div>
+          <div id="track-artist" class="lcd-artist">Selecciona una carpeta o arrastra tus MP3 aquí</div>
+          <div id="status-text" class="lcd-status">LISTO</div>
         </div>
       </div>
 
-      <!-- Barra de progreso (Seek bar) -->
+      <!-- Barra de progreso -->
       <div class="seek-row">
         <span id="time-current" class="time-label">00:00</span>
         <input
@@ -52,18 +56,13 @@
       <!-- Controles de reproducción + Volumen -->
       <div class="controls-bar">
         <div class="transport-group">
-          <button id="btn-open" class="ctrl-btn ctrl-btn-open" title="Abrir archivo de audio">
-            📂 ABRIR
-          </button>
-          <button id="btn-play" class="ctrl-btn ctrl-btn-primary" title="Reproducir (Espacio)" disabled>
-            ▶
-          </button>
-          <button id="btn-pause" class="ctrl-btn" title="Pausar (Espacio)" disabled>
-            ⏸
-          </button>
-          <button id="btn-stop" class="ctrl-btn" title="Detener" disabled>
-            ⏹
-          </button>
+          <button id="btn-prev" class="ctrl-btn" title="Anterior" disabled>⏮</button>
+          <button id="btn-play" class="ctrl-btn ctrl-btn-primary" title="Reproducir (Espacio)" disabled>▶</button>
+          <button id="btn-pause" class="ctrl-btn" title="Pausar (Espacio)" disabled>⏸</button>
+          <button id="btn-stop" class="ctrl-btn" title="Detener" disabled>⏹</button>
+          <button id="btn-next" class="ctrl-btn" title="Siguiente" disabled>⏭</button>
+          <button id="btn-shuffle" class="ctrl-btn" title="Aleatorio">🔀</button>
+          <button id="btn-repeat" class="ctrl-btn" title="Repetir: desactivado">🔁</button>
         </div>
 
         <div class="volume-group">
@@ -79,7 +78,39 @@
           <span id="volume-value" class="time-label">80%</span>
         </div>
       </div>
-    </main>
+    </section>
+
+    <!-- Módulo inferior: Biblioteca y Playlist (estilo Winamp Playlist Editor) -->
+    <section class="playlist-section">
+      <div class="playlist-toolbar">
+        <div class="playlist-actions">
+          <button id="btn-folder" class="tool-btn" title="Elegir carpeta dedicada de música">
+            📁 CARPETA
+          </button>
+          <button id="btn-open" class="tool-btn" title="Agregar archivos sueltos">
+            + ARCHIVOS
+          </button>
+        </div>
+        <input
+          id="search-input"
+          class="search-input"
+          type="text"
+          placeholder="Buscar canción o artista..."
+        />
+        <span id="playlist-count" class="playlist-count">0 pistas</span>
+      </div>
+
+      <div id="playlist-container" class="playlist-list">
+        <div class="playlist-empty">
+          Arrastra archivos o carpetas de música aquí, o presiona <strong>📁 CARPETA</strong>.
+        </div>
+      </div>
+    </section>
+
+    <!-- Overlay visual cuando arrastras archivos sobre la ventana -->
+    <div id="drop-overlay" class="drop-overlay">
+      <div class="drop-overlay-box">Suelta tus archivos o carpetas de audio aquí</div>
+    </div>
   </div>
 
   <script type="module" src="./dist/renderer/app.js"></script>

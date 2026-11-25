@@ -4,6 +4,7 @@ export interface AudioEngineCallbacks {
   onTimeUpdate?: (currentTime: number, duration: number) => void;
   onStateChange?: (state: PlaybackState) => void;
   onTrackLoaded?: (title: string, duration: number) => void;
+  onEnded?: () => void;
   onError?: (message: string) => void;
 }
 
@@ -49,6 +50,7 @@ export class AudioEngine {
     this.audio.addEventListener('ended', () => {
       this.setState('stopped');
       this.callbacks.onTimeUpdate?.(0, this.audio.duration);
+      this.callbacks.onEnded?.();
     });
 
     this.audio.addEventListener('error', () => {
