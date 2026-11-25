@@ -31,13 +31,41 @@
       <!-- 1. Main Deck (275x116) -->
       <div class="wsz-main-deck">
         <div class="wsz-titlebar">
-          <span class="wsz-fallback-brand">EXUM v0.6</span>
+          <button id="wsz-main-menu-btn" class="wsz-menu-btn" title="Menú Exum (Skins, Letras, Fuentes)">☰</button>
+          <span class="wsz-fallback-brand">EXUM v0.7</span>
           <button id="wsz-win-min" class="wsz-win-btn" title="Minimizar">_</button>
           <button id="wsz-win-shade" class="wsz-win-btn" title="Modo mini-barra flotante">▬</button>
           <button id="wsz-win-close" class="wsz-win-btn" title="Cerrar">×</button>
         </div>
 
-        <div class="wsz-clock">
+        <!-- Menú desplegable superior izquierdo -->
+        <div id="wsz-main-menu" class="wsz-popup-menu main-menu-pos hidden">
+          <button class="wsz-menu-item" data-main-action="skins">🏛️ Skins (.wsz)</button>
+          <button class="wsz-menu-item" data-main-action="lyrics">🎤 Letras (LRC)</button>
+          <button class="wsz-menu-item" data-main-action="sources">🌐 Fuentes (NET)</button>
+          <div class="wsz-menu-sep"></div>
+          <button class="wsz-menu-item" data-main-action="folder">📁 Elegir carpeta</button>
+          <button class="wsz-menu-item" data-main-action="files">+ Agregar archivos</button>
+          <div class="wsz-menu-sep"></div>
+          <button class="wsz-menu-item" data-main-action="pin">📌 Siempre encima</button>
+          <button class="wsz-menu-item" data-main-action="mini">▬ Mini-barra</button>
+        </div>
+
+        <!-- Barra vertical ClutterBar (O A I D V) -->
+        <div class="wsz-clutterbar">
+          <button id="wsz-clutter-o" class="wsz-clutter-btn" title="Opciones / Skins">O</button>
+          <button id="wsz-clutter-a" class="wsz-clutter-btn" title="Siempre encima (Always on Top)">A</button>
+          <button id="wsz-clutter-i" class="wsz-clutter-btn" title="Info de la canción">I</button>
+          <button id="wsz-clutter-d" class="wsz-clutter-btn" title="Tamaño doble (2x)">D</button>
+          <button id="wsz-clutter-v" class="wsz-clutter-btn" title="Cambiar visualizador">V</button>
+        </div>
+
+        <!-- Indicador Play / Pause / Stop (playpaus.bmp) -->
+        <div id="wsz-playpaus" class="wsz-playpaus state-stopped" title="Estado de reproducción">■</div>
+        <span id="wsz-minus" class="wsz-minus hidden">-</span>
+
+        <!-- Reloj clicable (alterna tiempo transcurrido / restante) -->
+        <div id="wsz-clock" class="wsz-clock" title="Clic para alternar tiempo transcurrido / restante">
           <span id="wsz-d0" class="wsz-digit">0</span>
           <span class="wsz-digit-gap"></span>
           <span id="wsz-d1" class="wsz-digit">0</span>
@@ -55,18 +83,28 @@
           title="Clic para cambiar visualizador (Barras / Onda / Off)"
         ></canvas>
 
-        <!-- Cuadrícula exacta del título (top:24, left:111, 154x12) -->
-        <div id="wsz-track-title" class="wsz-track-title">EXUM — ARRASTRA MP3 O ELIGE CARPETA</div>
+        <!-- Marquee con scroll horizontal y feedback temporal -->
+        <div id="wsz-track-title" class="wsz-track-title">
+          <span id="wsz-marquee-text" class="wsz-marquee-text">EXUM — ARRASTRA MP3 O ELIGE CARPETA</span>
+        </div>
 
-        <!-- Volumen (68x13 en x:107, y:57) -->
+        <!-- Indicadores Kbps, Khz y Mono/Stereo -->
+        <div id="wsz-kbps" class="wsz-kbps" title="Bitrate (kbps)">---</div>
+        <div id="wsz-khz" class="wsz-khz" title="Frecuencia (kHz)">--</div>
+        <div id="wsz-mono" class="wsz-mono" title="Mono">MONO</div>
+        <div id="wsz-stereo" class="wsz-stereo" title="Stereo">STEREO</div>
+
+        <!-- Volumen con perilla real -->
         <div class="wsz-vol-wrap">
           <div id="wsz-vol-bg" class="wsz-vol-bg"></div>
+          <div id="wsz-vol-thumb" class="wsz-vol-thumb"></div>
           <input id="wsz-vol-slider" class="wsz-vol-slider" type="range" min="0" max="100" value="80" title="Volumen" />
         </div>
 
-        <!-- Balance Izq/Der (38x13 en x:177, y:57) -->
+        <!-- Balance con perilla real -->
         <div class="wsz-bal-wrap">
           <div id="wsz-bal-bg" class="wsz-bal-bg"></div>
+          <div id="wsz-bal-thumb" class="wsz-bal-thumb"></div>
           <input id="wsz-bal-slider" class="wsz-bal-slider" type="range" min="-100" max="100" value="0" title="Balance (doble clic para centrar)" />
         </div>
 
@@ -92,37 +130,137 @@
         <button id="wsz-btn-repeat" class="wsz-shufrep-btn" title="Repetir">REP</button>
       </div>
 
-      <!-- 2. Equalizer Deck (275x116) -->
+      <!-- 2. Equalizer Deck (275x116 normal / 275x14 en Shade Mode) -->
       <div id="wsz-eq-deck" class="wsz-eq-deck">
-        <button id="wsz-eq-on" class="wsz-eq-on-btn active" title="Encender / apagar Ecualizador">ON</button>
-        <button id="wsz-eq-auto" class="wsz-eq-auto-btn" title="Restablecer EQ a 0 dB (Flat)">AUTO</button>
-        <button id="wsz-eq-presets-btn" class="wsz-eq-presets-btn" title="Elegir preset de ecualización">PRESETS</button>
+        <button id="wsz-eq-min" class="wsz-panel-min-btn" title="Resumir / expandir Ecualizador (Shade)">▬</button>
+        <button id="wsz-eq-close" class="wsz-panel-close-btn" title="Cerrar Ecualizador">×</button>
 
-        <!-- Menú desplegable de Presets -->
-        <div id="wsz-presets-menu" class="wsz-presets-menu hidden"></div>
+        <!-- Controles exclusivos de EQ Resumido (Shade Mode 275x14) -->
+        <div class="wsz-eq-shade-controls">
+          <div class="wsz-eq-shade-vol">
+            <div id="wsz-eq-shade-vol-thumb" class="wsz-eq-shade-thumb"></div>
+            <input id="wsz-eq-shade-vol-input" class="wsz-eq-shade-input" type="range" min="0" max="100" value="80" title="Volumen" />
+          </div>
+          <div class="wsz-eq-shade-bal">
+            <div id="wsz-eq-shade-bal-thumb" class="wsz-eq-shade-thumb"></div>
+            <input id="wsz-eq-shade-bal-input" class="wsz-eq-shade-input" type="range" min="-100" max="100" value="0" title="Balance" />
+          </div>
+        </div>
 
-        <!-- Preamp + 10 bandas renderizadas con sprites de eqmain.bmp -->
-        <div id="wsz-eq-sliders"></div>
+        <button id="wsz-eq-on" class="wsz-eq-on-btn eq-full-only active" title="Encender / apagar Ecualizador">ON</button>
+        <button id="wsz-eq-auto" class="wsz-eq-auto-btn eq-full-only" title="Restablecer EQ a 0 dB (Flat)">AUTO</button>
+        <canvas id="wsz-eq-graph" class="wsz-eq-graph eq-full-only" width="113" height="19" title="Curva de ecualización"></canvas>
+        <button id="wsz-eq-presets-btn" class="wsz-eq-presets-btn eq-full-only" title="Elegir preset de ecualización">PRESETS</button>
+
+        <div id="wsz-presets-menu" class="wsz-presets-menu eq-full-only hidden"></div>
+        <div id="wsz-eq-sliders" class="eq-full-only"></div>
       </div>
     </div>
 
-    <!-- 3. Playlist fluida -->
+    <!-- 3. Playlist fluida + barra clásica pledit.bmp + modo resumido (Shade 275x14) -->
     <section id="playlist-section" class="playlist-section normal-only">
-      <div class="playlist-header">
-        <span class="playlist-title-fallback">EXUM PLAYLIST</span>
-        <span id="playlist-count" class="playlist-count-pill">0 pistas</span>
-      </div>
-
-      <div id="playlist-container" class="playlist-list">
-        <div class="playlist-empty">
-          Arrastra archivos de música o skins <strong>.wsz</strong> aquí, o presiona <strong>📁</strong>.
+      <!-- Barra resumida de Playlist (275x14 escalada cuando se presiona minimizar PL) -->
+      <div id="pl-shade-scale-wrap" class="pl-shade-scale-wrap">
+        <div class="pl-shade-bar">
+          <div class="pl-shade-left"></div>
+          <div class="pl-shade-mid"></div>
+          <div class="pl-shade-right"></div>
+          <span id="pl-shade-track" class="pl-shade-track">EXUM PLAYLIST — SIN CANCIÓN</span>
+          <span id="pl-shade-dur" class="pl-shade-dur">0:00</span>
+          <button id="pl-shade-unshade" class="wsz-panel-min-btn" title="Expandir Playlist">▬</button>
+          <button id="pl-shade-close" class="wsz-panel-close-btn" title="Cerrar Playlist">×</button>
         </div>
       </div>
 
-      <div class="playlist-footer">
-        <button id="btn-folder" class="pl-btn" title="Elegir carpeta dedicada de música">📁</button>
-        <button id="btn-open" class="pl-btn" title="Agregar archivos sueltos">+</button>
-        <input id="search-input" class="pl-search" type="text" placeholder="Buscar..." />
+      <div class="playlist-header pl-full-only">
+        <span class="playlist-title-fallback">EXUM PLAYLIST</span>
+        <div class="playlist-header-right">
+          <span id="playlist-count" class="playlist-count-pill">0 pistas</span>
+          <button id="pl-win-min" class="pl-win-ctrl" title="Resumir Playlist (Shade)">▬</button>
+          <button id="pl-win-close" class="pl-win-ctrl" title="Cerrar Playlist">×</button>
+        </div>
+      </div>
+
+      <div id="playlist-container" class="playlist-list pl-full-only">
+        <div class="playlist-empty">
+          Arrastra archivos de música o skins <strong>.wsz</strong> aquí, o presiona <strong>ADD</strong>.
+        </div>
+      </div>
+
+      <!-- Barra inferior clásica pledit.bmp (275x38 escalada exacto con la skin) -->
+      <div id="pl-classic-scale-wrap" class="pl-classic-scale-wrap pl-full-only">
+        <div class="pl-classic-bar">
+          <div class="pl-classic-left"></div>
+          <div class="pl-classic-right"></div>
+
+          <!-- Botones ADD / REM / SEL / MISC -->
+          <button id="pl-btn-add" class="pl-sprite-btn" title="Agregar (Archivos / Carpeta / URL)">ADD</button>
+          <button id="pl-btn-rem" class="pl-sprite-btn" title="Quitar / Recortar / Limpiar">REM</button>
+          <button id="pl-btn-sel" class="pl-sprite-btn" title="Seleccionar pistas">SEL</button>
+          <button id="pl-btn-misc" class="pl-sprite-btn" title="Ordenar / Mezclar / Invertir">MISC</button>
+
+          <!-- Tiempo pista actual / total playlist -->
+          <div id="pl-total-time" class="pl-total-time">00:00/00:00</div>
+
+          <!-- Mini transporte dentro de pledit.bmp -->
+          <div class="pl-mini-transport">
+            <button id="pl-mini-prev" class="pl-mini-btn" title="Anterior">⏮</button>
+            <button id="pl-mini-play" class="pl-mini-btn" title="Play">▶</button>
+            <button id="pl-mini-pause" class="pl-mini-btn" title="Pause">⏸</button>
+            <button id="pl-mini-stop" class="pl-mini-btn" title="Stop">⏹</button>
+            <button id="pl-mini-next" class="pl-mini-btn" title="Siguiente">⏭</button>
+            <button id="pl-mini-eject" class="pl-mini-btn" title="Abrir archivos">⏏</button>
+          </div>
+
+          <!-- Botón LIST OPTS -->
+          <button id="pl-btn-list" class="pl-sprite-btn" title="Playlists guardadas y .m3u">LIST</button>
+
+          <!-- Menús emergentes de Playlist (se abren hacia arriba) -->
+          <div id="pl-menu-add" class="wsz-popup-menu pl-menu-up hidden" style="left: 11px;">
+            <button class="wsz-menu-item" data-pl-action="add-files">+ Agregar archivos</button>
+            <button class="wsz-menu-item" data-pl-action="add-folder">📁 Elegir carpeta</button>
+            <button class="wsz-menu-item" data-pl-action="add-url">🌐 Stream / Radio (NET)</button>
+          </div>
+
+          <div id="pl-menu-rem" class="wsz-popup-menu pl-menu-up hidden" style="left: 40px;">
+            <button class="wsz-menu-item" data-pl-action="rem-selected">Quitar seleccionadas</button>
+            <button class="wsz-menu-item" data-pl-action="rem-crop">Recortar (solo sel.)</button>
+            <button class="wsz-menu-item" data-pl-action="rem-dupes">Quitar duplicados</button>
+            <button class="wsz-menu-item" data-pl-action="rem-all">Limpiar toda la lista</button>
+          </div>
+
+          <div id="pl-menu-sel" class="wsz-popup-menu pl-menu-up hidden" style="left: 69px;">
+            <button class="wsz-menu-item" data-pl-action="sel-all">Seleccionar todo</button>
+            <button class="wsz-menu-item" data-pl-action="sel-none">Deseleccionar todo</button>
+            <button class="wsz-menu-item" data-pl-action="sel-inv">Invertir selección</button>
+          </div>
+
+          <div id="pl-menu-misc" class="wsz-popup-menu pl-menu-up hidden" style="left: 98px;">
+            <button class="wsz-menu-item" data-pl-action="sort-title">Ordenar por título</button>
+            <button class="wsz-menu-item" data-pl-action="sort-artist">Ordenar por artista</button>
+            <button class="wsz-menu-item" data-pl-action="sort-duration">Ordenar por duración</button>
+            <div class="wsz-menu-sep"></div>
+            <button class="wsz-menu-item" data-pl-action="misc-shuffle">Mezclar orden</button>
+            <button class="wsz-menu-item" data-pl-action="misc-reverse">Invertir orden</button>
+          </div>
+
+          <div id="pl-menu-list" class="wsz-popup-menu pl-menu-up pl-menu-right hidden">
+            <div class="pl-save-inline">
+              <input id="pl-save-name" class="pl-save-input" type="text" placeholder="Nombre de playlist..." />
+              <button id="pl-save-confirm" class="pl-save-go" title="Guardar playlist">💾</button>
+            </div>
+            <div id="pl-saved-items" class="pl-saved-items"></div>
+            <div class="wsz-menu-sep"></div>
+            <button class="wsz-menu-item" data-pl-action="list-new">Nueva lista vacía</button>
+            <button class="wsz-menu-item" data-pl-action="list-import">📂 Importar .m3u</button>
+            <button class="wsz-menu-item" data-pl-action="list-export">💾 Exportar .m3u</button>
+          </div>
+        </div>
+      </div>
+
+      <!-- Tira fina de utilidades Exum (Buscador + NET / LRC / SKINS) -->
+      <div class="playlist-footer pl-full-only">
+        <input id="search-input" class="pl-search" type="text" placeholder="Buscar canción o artista..." />
         <button id="btn-sources" class="pl-btn" title="Radios / Streams URL y Spotify">NET</button>
         <button id="btn-lyrics" class="pl-btn" title="Abrir ventana flotante de Letras">LRC</button>
         <button id="btn-skins" class="pl-btn" title="Abrir gestor y museo de Skins .wsz">SKINS</button>

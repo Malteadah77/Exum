@@ -44,6 +44,7 @@ export async function buildTrackFromFile(filePath: string): Promise<Track> {
       duration: metadata.format.duration ?? 0,
       bitrate: metadata.format.bitrate ? Math.round(metadata.format.bitrate / 1000) : undefined,
       sampleRate: metadata.format.sampleRate,
+      channels: metadata.format.numberOfChannels,
       codec: metadata.format.container || fallbackCodec,
     };
   } catch {

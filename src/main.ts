@@ -4,6 +4,13 @@ import { loadConfig, saveConfig } from './main/configStore';
 import { readTracksFromPaths, scanFolder } from './main/libraryScanner';
 import { fetchLyrics } from './main/lyricsService';
 import {
+  deleteSavedPlaylist,
+  exportM3uDialog,
+  importM3uDialog,
+  listSavedPlaylists,
+  saveNamedPlaylist,
+} from './main/playlistStore';
+import {
   connectSpotify,
   disconnectSpotify,
   getSpotifyPlaylistTracks,
@@ -22,6 +29,7 @@ import {
 import {
   AppConfig,
   FloatingWindowType,
+  PanelState,
   ShortcutAction,
   Track,
   WszPleditColors,
@@ -36,44 +44,54 @@ let sourcesWindow: BrowserWindow | null = null;
 const BASE_W = 275;
 const BASE_H_MAIN = 116;
 const BASE_H_EQ = 116;
-const BASE_H_PL = 128;
+const BASE_H_PL = 152;
+const BASE_H_SHADED = 14;
 const MIN_SCALE = 1;
 const MAX_SCALE = 2.5;
 
 let normalBounds: Rectangle | null = null;
 let isMiniMode = false;
-let isEqPanelVisible = true;
-let isPlPanelVisible = true;
+let eqPanelState: PanelState = 'open';
+let plPanelState: PanelState = 'open';
+// Única fuente de verdad de la escala actual: evita encogimiento progresivo al alternar EQ/PL
+let currentScale = 1.5;
+let isProgrammaticResize = false;
 
-function computeBaseHeight(eqVisible: boolean, plVisible: boolean): number {
-  return BASE_H_MAIN + (eqVisible ? BASE_H_EQ : 0) + (plVisible ? BASE_H_PL : 0);
+function computeBaseHeight(eqState: PanelState, plState: PanelState): number {
+  const eqH = eqState === 'open' ? BASE_H_EQ : eqState === 'shaded' ? BASE_H_SHADED : 0;
+  const plH = plState === 'open' ? BASE_H_PL : plState === 'shaded' ? BASE_H_SHADED : 0;
+  return BASE_H_MAIN + eqH + plH;
 }
 
-function applyWindowProportions(eqVisible: boolean, plVisible: boolean, resizeHeight = true): void {
+function applyWindowProportions(eqState: PanelState, plState: PanelState, resizeWindow = true): void {
   if (!mainWindow || mainWindow.isDestroyed() || isMiniMode) return;
 
-  isEqPanelVisible = eqVisible;
-  isPlPanelVisible = plVisible;
-  const baseH = computeBaseHeight(eqVisible, plVisible);
+  eqPanelState = eqState;
+  plPanelState = plState;
+  const baseH = computeBaseHeight(eqState, plState);
   const minW = Math.round(BASE_W * MIN_SCALE);
   const minH = Math.round(baseH * MIN_SCALE);
   const maxW = Math.round(BASE_W * MAX_SCALE);
   const maxH = Math.round(baseH * MAX_SCALE);
 
-  // Primero liberamos límites para que setSize nunca sea bloqueado por el límite anterior
+  isProgrammaticResize = true;
   mainWindow.setAspectRatio(0);
   mainWindow.setMinimumSize(minW, Math.min(minH, BASE_H_MAIN));
   mainWindow.setMaximumSize(maxW, Math.max(maxH, Math.round((BASE_H_MAIN + BASE_H_EQ + BASE_H_PL) * MAX_SCALE)));
 
-  if (resizeHeight) {
-    const [currentW] = mainWindow.getSize();
-    const scale = Math.max(MIN_SCALE, Math.min(MAX_SCALE, currentW / BASE_W));
-    mainWindow.setSize(Math.round(BASE_W * scale), Math.round(baseH * scale));
+  if (resizeWindow) {
+    const targetW = Math.round(BASE_W * currentScale);
+    const targetH = Math.round(baseH * currentScale);
+    mainWindow.setContentSize(targetW, targetH);
   }
 
   mainWindow.setMinimumSize(minW, minH);
   mainWindow.setMaximumSize(maxW, maxH);
   mainWindow.setAspectRatio(BASE_W / baseH);
+
+  setTimeout(() => {
+    isProgrammaticResize = false;
+  }, 120);
 }
 
 // Estado sincronizado en memoria para ventanas flotantes recién abiertas
@@ -82,16 +100,16 @@ let currentPalette: WszPleditColors = { ...DEFAULT_PLEDIT };
 let activeSkinId: string | null = null;
 
 function createWindow(): void {
-  const initialScale = 1.5;
-  const initialBaseH = computeBaseHeight(true, true);
+  const initialBaseH = computeBaseHeight('open', 'open');
   mainWindow = new BrowserWindow({
-    width: Math.round(BASE_W * initialScale),
-    height: Math.round(initialBaseH * initialScale),
+    width: Math.round(BASE_W * currentScale),
+    height: Math.round(initialBaseH * currentScale),
     minWidth: Math.round(BASE_W * MIN_SCALE),
     maxWidth: Math.round(BASE_W * MAX_SCALE),
     minHeight: Math.round(initialBaseH * MIN_SCALE),
     maxHeight: Math.round(initialBaseH * MAX_SCALE),
     frame: false,
+    useContentSize: true,
     backgroundColor: '#0e090b',
     webPreferences: {
       preload: path.join(__dirname, 'preload.js'),
@@ -102,6 +120,15 @@ function createWindow(): void {
 
   mainWindow.setAspectRatio(BASE_W / initialBaseH);
   mainWindow.loadFile(path.join(__dirname, '../index.html'));
+
+  // Solo actualizamos currentScale cuando el usuario redimensiona manualmente la ventana
+  mainWindow.on('resize', () => {
+    if (!mainWindow || isProgrammaticResize || isMiniMode) return;
+    const [w] = mainWindow.getContentSize();
+    if (w >= BASE_W * MIN_SCALE && w <= BASE_W * MAX_SCALE + 2) {
+      currentScale = Math.max(MIN_SCALE, Math.min(MAX_SCALE, w / BASE_W));
+    }
+  });
 
   // Al cerrar la ventana principal, cerramos también las flotantes
   mainWindow.on('closed', () => {
@@ -255,6 +282,14 @@ ipcMain.handle('window:togglePin', (event) => {
   return next;
 });
 
+ipcMain.handle('window:toggleDoubleSize', () => {
+  if (!mainWindow || mainWindow.isDestroyed() || isMiniMode) return false;
+  const isDouble = currentScale >= 1.9;
+  currentScale = isDouble ? 1.5 : 2;
+  applyWindowProportions(eqPanelState, plPanelState, true);
+  return !isDouble;
+});
+
 ipcMain.handle('window:openFloating', (_event, type: FloatingWindowType) => {
   openFloatingWindow(type);
 });
@@ -279,14 +314,14 @@ ipcMain.handle('window:setMiniMode', (_event, enabled: boolean) => {
       mainWindow.setMaximumSize(688, 1000);
       mainWindow.setBounds(normalBounds);
     }
-    applyWindowProportions(isEqPanelVisible, isPlPanelVisible, false);
+    applyWindowProportions(eqPanelState, plPanelState, false);
   }
   return isMiniMode;
 });
 
-// Ajusta altura y proporción bloqueada cuando se ocultan o muestran EQ o PL
-ipcMain.handle('window:setPanels', (_event, eqVisible: boolean, plVisible: boolean) => {
-  applyWindowProportions(eqVisible, plVisible, true);
+// Ajusta altura y proporción bloqueada según estado de EQ y PL (open / shaded / closed)
+ipcMain.handle('window:setPanels', (_event, eqState: PanelState, plState: PanelState) => {
+  applyWindowProportions(eqState, plState, true);
 });
 
 // Sincronización entre ventana principal y ventanas flotantes
@@ -337,6 +372,17 @@ ipcMain.handle('spotify:playlists', async () => listSpotifyPlaylists());
 ipcMain.handle('spotify:playlistTracks', async (_event, playlistId: string) =>
   getSpotifyPlaylistTracks(playlistId)
 );
+
+// Gestión de Playlists guardadas + Importar/Exportar .m3u
+ipcMain.handle('playlists:list', async () => listSavedPlaylists());
+ipcMain.handle('playlists:save', async (_event, name: string, tracks: Track[]) =>
+  saveNamedPlaylist(name, tracks)
+);
+ipcMain.handle('playlists:delete', async (_event, id: string) => deleteSavedPlaylist(id));
+ipcMain.handle('playlists:exportM3u', async (_event, tracks: Track[]) =>
+  exportM3uDialog(mainWindow, tracks)
+);
+ipcMain.handle('playlists:importM3u', async () => importM3uDialog(mainWindow));
 
 ipcMain.handle('sync:getState', () => ({
   track: currentTrack,

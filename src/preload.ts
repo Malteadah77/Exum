@@ -5,6 +5,8 @@ import {
   FloatingWindowType,
   LyricsResult,
   MuseumSkinItem,
+  PanelState,
+  SavedPlaylist,
   ShortcutAction,
   SpotifyAuthState,
   SpotifyPlaylistItem,
@@ -19,10 +21,11 @@ const api: ElectronAPI = {
   minimizeWindow: () => ipcRenderer.send('window:minimize'),
   closeWindow: () => ipcRenderer.send('window:close'),
   toggleAlwaysOnTop: () => ipcRenderer.invoke('window:togglePin') as Promise<boolean>,
+  toggleDoubleSize: () => ipcRenderer.invoke('window:toggleDoubleSize') as Promise<boolean>,
   setMiniMode: (enabled: boolean) =>
     ipcRenderer.invoke('window:setMiniMode', enabled) as Promise<boolean>,
-  setWindowPanels: (eqVisible: boolean, plVisible: boolean) =>
-    ipcRenderer.invoke('window:setPanels', eqVisible, plVisible) as Promise<void>,
+  setWindowPanels: (eqState: PanelState, plState: PanelState) =>
+    ipcRenderer.invoke('window:setPanels', eqState, plState) as Promise<void>,
   openFloatingWindow: (type: FloatingWindowType) =>
     ipcRenderer.invoke('window:openFloating', type) as Promise<void>,
   openExternalUrl: (url: string) =>
@@ -109,6 +112,15 @@ const api: ElectronAPI = {
     ipcRenderer.invoke('spotify:playlists') as Promise<SpotifyPlaylistItem[]>,
   spotifyGetPlaylistTracks: (playlistId: string) =>
     ipcRenderer.invoke('spotify:playlistTracks', playlistId) as Promise<SpotifyTrackItem[]>,
+
+  listSavedPlaylists: () => ipcRenderer.invoke('playlists:list') as Promise<SavedPlaylist[]>,
+  saveNamedPlaylist: (name: string, tracks: Track[]) =>
+    ipcRenderer.invoke('playlists:save', name, tracks) as Promise<SavedPlaylist[]>,
+  deleteSavedPlaylist: (id: string) =>
+    ipcRenderer.invoke('playlists:delete', id) as Promise<SavedPlaylist[]>,
+  exportPlaylistM3u: (tracks: Track[]) =>
+    ipcRenderer.invoke('playlists:exportM3u', tracks) as Promise<boolean>,
+  importPlaylistM3u: () => ipcRenderer.invoke('playlists:importM3u') as Promise<Track[]>,
 };
 
 contextBridge.exposeInMainWorld('electronAPI', api);

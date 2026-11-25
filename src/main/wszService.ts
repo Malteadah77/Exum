@@ -27,7 +27,10 @@ const SPRITE_FILES: Array<{ key: keyof WszSkinSprites; candidates: string[] }> =
   { key: 'balance', candidates: ['balance.bmp', 'balance.png'] },
   { key: 'shufrep', candidates: ['shufrep.bmp', 'shufrep.png'] },
   { key: 'numbers', candidates: ['nums_ex.bmp', 'numbers.bmp', 'numbers.png'] },
+  { key: 'playpaus', candidates: ['playpaus.bmp', 'playpaus.png'] },
+  { key: 'monoster', candidates: ['monoster.bmp', 'monoster.png'] },
   { key: 'eqmain', candidates: ['eqmain.bmp', 'eqmain.png'] },
+  { key: 'eqEx', candidates: ['eq_ex.bmp', 'eq_ex.png'] },
   { key: 'pledit', candidates: ['pledit.bmp', 'pledit.png'] },
 ];
 

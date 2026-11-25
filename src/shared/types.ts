@@ -5,6 +5,7 @@ export type VisualizerMode = 'bars' | 'wave' | 'off';
 export type ShortcutAction = 'play-pause' | 'next' | 'previous' | 'stop';
 export type FloatingWindowType = 'lyrics' | 'skins' | 'sources';
 export type TrackSourceType = 'local' | 'stream' | 'spotify';
+export type PanelState = 'open' | 'shaded' | 'closed';
 
 export interface WszSkinMeta {
   id: string;
@@ -29,7 +30,10 @@ export interface WszSkinSprites {
   balance?: string;
   shufrep?: string;
   numbers?: string;
+  playpaus?: string;
+  monoster?: string;
   eqmain?: string;
+  eqEx?: string;
   pledit?: string;
 }
 
@@ -52,6 +56,13 @@ export interface SavedStream {
   name: string;
   url: string;
   genre: string;
+}
+
+export interface SavedPlaylist {
+  id: string;
+  name: string;
+  tracks: Track[];
+  updatedAt: number;
 }
 
 export interface SpotifyAuthState {
@@ -101,6 +112,7 @@ export interface Track {
   duration: number;
   bitrate?: number;
   sampleRate?: number;
+  channels?: number;
   codec?: string;
   sourceType?: TrackSourceType;
   isLive?: boolean;
@@ -126,8 +138,9 @@ export interface ElectronAPI {
   minimizeWindow: () => void;
   closeWindow: () => void;
   toggleAlwaysOnTop: () => Promise<boolean>;
+  toggleDoubleSize: () => Promise<boolean>;
   setMiniMode: (enabled: boolean) => Promise<boolean>;
-  setWindowPanels: (eqVisible: boolean, plVisible: boolean) => Promise<void>;
+  setWindowPanels: (eqState: PanelState, plState: PanelState) => Promise<void>;
   openFloatingWindow: (type: FloatingWindowType) => Promise<void>;
   openExternalUrl: (url: string) => Promise<void>;
 
@@ -176,4 +189,11 @@ export interface ElectronAPI {
   spotifyDisconnect: () => Promise<SpotifyAuthState>;
   spotifyListPlaylists: () => Promise<SpotifyPlaylistItem[]>;
   spotifyGetPlaylistTracks: (playlistId: string) => Promise<SpotifyTrackItem[]>;
+
+  // Gestión de Playlists guardadas + .m3u
+  listSavedPlaylists: () => Promise<SavedPlaylist[]>;
+  saveNamedPlaylist: (name: string, tracks: Track[]) => Promise<SavedPlaylist[]>;
+  deleteSavedPlaylist: (id: string) => Promise<SavedPlaylist[]>;
+  exportPlaylistM3u: (tracks: Track[]) => Promise<boolean>;
+  importPlaylistM3u: () => Promise<Track[]>;
 }
