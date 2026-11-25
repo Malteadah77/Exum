@@ -222,3 +222,27 @@ export async function getSpotifyPlaylistTracks(playlistId: string): Promise<Spot
     return [];
   }
 }
+
+export async function getSpotifyPlaylistDetails(
+  playlistId: string
+): Promise<{ name: string; tracks: SpotifyTrackItem[] } | null> {
+  if (!accessToken || Date.now() >= tokenExpiresAt) return null;
+
+  try {
+    const [metaRes, tracks] = await Promise.all([
+      fetch(`https://api.spotify.com/v1/playlists/${encodeURIComponent(playlistId)}?fields=name`, {
+        headers: { Authorization: `Bearer ${accessToken}` },
+      }),
+      getSpotifyPlaylistTracks(playlistId),
+    ]);
+
+    if (!metaRes.ok) return null;
+    const meta = (await metaRes.json()) as { name?: string };
+    return {
+      name: meta.name || 'Playlist Spotify',
+      tracks,
+    };
+  } catch {
+    return null;
+  }
+}

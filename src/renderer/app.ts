@@ -581,6 +581,15 @@ window.electronAPI.onExternalTrackReceived((track: Track, autoPlay: boolean) => 
   playlist.addTracks([track], autoPlay);
 });
 
+window.electronAPI.onReplacePlaylistReceived((tracks: Track[], label?: string) => {
+  playlist.setTracks(tracks, tracks.length > 0);
+  if (label) classicView?.showTempMarquee(label.toUpperCase());
+});
+
+window.electronAPI.onPauseLocalRequested(() => {
+  engine.pause();
+});
+
 // Arranque inicial
 async function bootstrap(): Promise<void> {
   const config = await window.electronAPI.loadConfig();

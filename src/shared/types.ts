@@ -58,6 +58,37 @@ export interface SavedStream {
   genre: string;
 }
 
+export interface RadioStationItem {
+  id: string;
+  name: string;
+  url: string;
+  country: string;
+  tags: string;
+  bitrate: number;
+  codec: string;
+}
+
+export interface SavedYouTubeItem {
+  id: string;
+  title: string;
+  originalUrl: string;
+  embedUrl: string;
+  isPlaylist: boolean;
+}
+
+export interface SpotifyMatchResult {
+  playlistName: string;
+  matchedTracks: Track[];
+  missingTracks: SpotifyTrackItem[];
+  error?: string;
+}
+
+export interface DirectDownloadResult {
+  ok: boolean;
+  track?: Track;
+  error?: string;
+}
+
 export interface SavedPlaylist {
   id: string;
   name: string;
@@ -130,6 +161,7 @@ export interface AppConfig {
   eqGains: number[];
   visualizerMode: VisualizerMode;
   savedStreams: SavedStream[];
+  savedYouTube: SavedYouTubeItem[];
   spotifyClientId: string | null;
 }
 
@@ -162,6 +194,8 @@ export interface ElectronAPI {
   broadcastPalette: (palette: WszPleditColors) => void;
   requestSeekFromLyrics: (seconds: number) => void;
   sendExternalTrack: (track: Track, autoPlay: boolean) => void;
+  replaceMainPlaylist: (tracks: Track[], label?: string) => void;
+  pauseLocalAudio: () => void;
   getSyncState: () => Promise<{ track: Track | null; palette: WszPleditColors; activeSkinId: string | null }>;
 
   // Eventos recibidos desde Main
@@ -172,6 +206,8 @@ export interface ElectronAPI {
   onSeekRequested: (callback: (seconds: number) => void) => void;
   onSkinApplied: (callback: (skin: WszSkinData | null) => void) => void;
   onExternalTrackReceived: (callback: (track: Track, autoPlay: boolean) => void) => void;
+  onReplacePlaylistReceived: (callback: (tracks: Track[], label?: string) => void) => void;
+  onPauseLocalRequested: (callback: () => void) => void;
 
   // Motor de Skins .wsz + Webamp Skin Museum
   listWszSkins: () => Promise<WszSkinMeta[]>;
@@ -183,12 +219,16 @@ export interface ElectronAPI {
   searchMuseumSkins: (query: string) => Promise<MuseumSkinItem[]>;
   downloadMuseumSkin: (downloadUrl: string, filename: string) => Promise<WszSkinData | null>;
 
-  // Spotify Oficial (OAuth 2.0 PKCE)
+  // Spotify Oficial (OAuth 2.0 PKCE) + Fuentes Externas
   spotifyGetState: () => Promise<SpotifyAuthState>;
   spotifyConnect: (clientId: string) => Promise<SpotifyAuthState>;
   spotifyDisconnect: () => Promise<SpotifyAuthState>;
   spotifyListPlaylists: () => Promise<SpotifyPlaylistItem[]>;
   spotifyGetPlaylistTracks: (playlistId: string) => Promise<SpotifyTrackItem[]>;
+  matchSpotifyPlaylist: (urlOrId: string) => Promise<SpotifyMatchResult>;
+  searchWorldRadios: (query: string) => Promise<RadioStationItem[]>;
+  resolveStreamUrl: (url: string) => Promise<{ url: string; title?: string }>;
+  downloadDirectAudio: (url: string, customName?: string) => Promise<DirectDownloadResult>;
 
   // Gestión de Playlists guardadas + .m3u
   listSavedPlaylists: () => Promise<SavedPlaylist[]>;

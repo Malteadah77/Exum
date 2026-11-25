@@ -5,7 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <meta
     http-equiv="Content-Security-Policy"
-    content="default-src 'self'; style-src 'self' 'unsafe-inline';"
+    content="default-src 'self'; frame-src https://www.youtube-nocookie.com https://www.youtube.com; style-src 'self' 'unsafe-inline';"
   />
   <title>Exum — Fuentes Externas</title>
   <link rel="stylesheet" href="./styles/floating.css" />
@@ -13,7 +13,7 @@
 <body>
   <div class="float-shell">
     <header class="float-titlebar">
-      <span class="float-title">🌐 EXUM — FUENTES EXTERNAS (STREAMS & SPOTIFY)</span>
+      <span class="float-title">🌐 EXUM — FUENTES EXTERNAS (NET)</span>
       <div class="float-actions">
         <button id="btn-pin" class="float-btn" title="Mantener siempre visible">📌</button>
         <button id="btn-min" class="float-btn" title="Minimizar">_</button>
@@ -23,38 +23,88 @@
 
     <main class="float-body">
       <div class="tabs-bar">
-        <button id="tab-streams" class="float-btn active">📻 Radios & Streams URL</button>
-        <button id="tab-spotify" class="float-btn">🎵 Spotify (API Oficial)</button>
+        <button id="tab-radios" class="float-btn active">📻 Radios</button>
+        <button id="tab-urls" class="float-btn">🔗 URL/.m3u</button>
+        <button id="tab-youtube" class="float-btn">▶ YouTube</button>
+        <button id="tab-spotify" class="float-btn">🎵 Spotify</button>
       </div>
 
-      <!-- Pestaña 1: Streams y Radios por URL -->
-      <section id="panel-streams" class="tab-panel">
+      <!-- Pestaña 1: Buscador Mundial de Radios (+30,000 vía Radio Browser API) -->
+      <section id="panel-radios" class="tab-panel">
+        <div class="search-row">
+          <input id="radio-search-input" class="float-input" type="text" placeholder="Buscar radio o género (ej: lofi, synthwave, rock, japan)..." />
+          <button id="btn-radio-search" class="float-btn">Buscar</button>
+        </div>
+        <div class="chips-row">
+          <button class="chip-btn radio-tag-chip" data-tag="lofi">lofi</button>
+          <button class="chip-btn radio-tag-chip" data-tag="synthwave">synthwave</button>
+          <button class="chip-btn radio-tag-chip" data-tag="chillout">chillout</button>
+          <button class="chip-btn radio-tag-chip" data-tag="ambient">ambient</button>
+          <button class="chip-btn radio-tag-chip" data-tag="rock">rock</button>
+          <button class="chip-btn radio-tag-chip" data-tag="anime">anime</button>
+          <button class="chip-btn radio-tag-chip" data-tag="jazz">jazz</button>
+        </div>
+        <div id="radio-results-list" class="source-list">
+          <div class="lyrics-message">Cargando radios populares del mundo...</div>
+        </div>
+      </section>
+
+      <!-- Pestaña 2: URLs directas, .m3u / .pls y guardar audio abierto en tu carpeta local -->
+      <section id="panel-urls" class="tab-panel hidden">
         <div class="form-stack">
+          <input id="stream-name" class="float-input" type="text" placeholder="Nombre (opcional)..." />
+          <input id="stream-url" class="float-input" type="url" placeholder="https://... (audio directo .mp3/.wav o radio .m3u/.pls)" />
           <div class="search-row">
-            <input id="stream-name" class="float-input" type="text" placeholder="Nombre de la radio o audio..." />
-          </div>
-          <div class="search-row">
-            <input id="stream-url" class="float-input" type="url" placeholder="https://... (URL directa MP3 / AAC / Icecast)" />
-            <button id="btn-add-stream" class="float-btn">+ Agregar</button>
+            <button id="btn-add-stream" class="float-btn">▶ Escuchar y guardar</button>
+            <button id="btn-download-audio" class="float-btn" title="Descarga URL directa de audio abierto (.mp3/.wav/.flac) a tu carpeta de música">
+              ⬇ Guardar MP3 local
+            </button>
           </div>
         </div>
+        <div id="url-status-banner" class="status-banner hidden"></div>
         <div id="streams-list" class="source-list"></div>
       </section>
 
-      <!-- Pestaña 2: Spotify Oficial (OAuth 2.0 PKCE) -->
+      <!-- Pestaña 3: YouTube Oficial (Embed de video o playlist sin descargar) -->
+      <section id="panel-youtube" class="tab-panel hidden">
+        <div class="search-row">
+          <input id="yt-url-input" class="float-input" type="url" placeholder="Pega link de video o playlist de YouTube..." />
+          <button id="btn-yt-play" class="float-btn">▶ Abrir</button>
+        </div>
+        <div id="yt-status-banner" class="status-banner hidden"></div>
+        <div id="yt-player-box" class="yt-player-box hidden">
+          <iframe
+            id="yt-iframe"
+            class="yt-iframe"
+            allow="autoplay; encrypted-media; picture-in-picture"
+            allowfullscreen
+          ></iframe>
+        </div>
+        <div class="section-bar">
+          <span class="section-title">TUS LINKS DE YOUTUBE GUARDADOS</span>
+          <button id="btn-yt-stop" class="float-btn">⏹ Detener YT</button>
+        </div>
+        <div id="yt-saved-list" class="source-list"></div>
+      </section>
+
+      <!-- Pestaña 4: Spotify Oficial (PKCE + Emparejar link de playlist con tus MP3 locales) -->
       <section id="panel-spotify" class="tab-panel hidden">
         <div class="hint-box">
-          Crea una app gratis en <strong>developer.spotify.com</strong> con Redirect URI
-          <code>http://127.0.0.1:8888/callback</code> y pega abajo tu <strong>Client ID</strong>.
+          App gratis en <strong>developer.spotify.com</strong> (Redirect URI:
+          <code>http://127.0.0.1:8888/callback</code>). Pega tu <strong>Client ID</strong> y vincula tu cuenta.
         </div>
         <div class="search-row">
           <input id="spotify-client-id" class="float-input" type="text" placeholder="Tu Spotify Client ID..." />
           <button id="btn-spotify-connect" class="float-btn">Vincular</button>
           <button id="btn-spotify-disconnect" class="float-btn hidden">Salir</button>
         </div>
-        <div id="spotify-status" class="section-title">No vinculado</div>
+        <div class="search-row">
+          <input id="spotify-link-input" class="float-input" type="url" placeholder="Pega link open.spotify.com/playlist/... para emparejar con tus MP3" />
+          <button id="btn-spotify-match" class="float-btn">Emparejar</button>
+        </div>
+        <div id="spotify-status" class="status-banner">No vinculado</div>
         <div id="spotify-list" class="source-list">
-          <div class="lyrics-message">Vincula tu cuenta de Spotify para ver tus playlists.</div>
+          <div class="lyrics-message">Vincula tu cuenta de Spotify para ver o emparejar tus playlists.</div>
         </div>
       </section>
     </main>

@@ -1,6 +1,12 @@
 import { app, BrowserWindow, dialog, globalShortcut, ipcMain, Rectangle, shell } from 'electron';
 import * as path from 'path';
 import { loadConfig, saveConfig } from './main/configStore';
+import {
+  downloadDirectAudioToLibrary,
+  matchSpotifyPlaylistToLocal,
+  resolveStreamUrl,
+  searchWorldRadios,
+} from './main/externalSourcesService';
 import { readTracksFromPaths, scanFolder } from './main/libraryScanner';
 import { fetchLyrics } from './main/lyricsService';
 import {
@@ -355,11 +361,34 @@ ipcMain.on('external:addTrack', (_event, track: Track, autoPlay: boolean) => {
   }
 });
 
+ipcMain.on('external:replacePlaylist', (_event, tracks: Track[], label?: string) => {
+  if (mainWindow && !mainWindow.isDestroyed()) {
+    mainWindow.webContents.send('external:replacePlaylist', tracks, label);
+  }
+});
+
+ipcMain.on('external:pauseLocal', () => {
+  if (mainWindow && !mainWindow.isDestroyed()) {
+    mainWindow.webContents.send('external:pauseLocal');
+  }
+});
+
 ipcMain.handle('shell:openExternal', async (_event, url: string) => {
   if (typeof url === 'string' && (url.startsWith('https://') || url.startsWith('http://'))) {
     await shell.openExternal(url);
   }
 });
+
+// Fuentes Externas (Radio Browser, .m3u/.pls, descarga audio directo, Spotify Match)
+ipcMain.handle('external:searchRadios', async (_event, query: string) => searchWorldRadios(query));
+ipcMain.handle('external:resolveStream', async (_event, url: string) => resolveStreamUrl(url));
+ipcMain.handle('external:downloadAudio', async (event, url: string, customName?: string) => {
+  const owner = BrowserWindow.fromWebContents(event.sender) ?? mainWindow;
+  return downloadDirectAudioToLibrary(url, customName, owner);
+});
+ipcMain.handle('spotify:matchPlaylist', async (_event, urlOrId: string) =>
+  matchSpotifyPlaylistToLocal(urlOrId)
+);
 
 // Spotify Oficial (OAuth 2.0 PKCE)
 ipcMain.handle('spotify:state', () => getSpotifyState());

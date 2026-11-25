@@ -38,6 +38,7 @@ const DEFAULT_CONFIG: AppConfig = {
   eqGains: [...DEFAULT_EQ_GAINS],
   visualizerMode: 'bars',
   savedStreams: [...DEFAULT_STREAMS],
+  savedYouTube: [],
   spotifyClientId: null,
 };
 
@@ -58,6 +59,9 @@ export async function loadConfig(): Promise<AppConfig> {
     if (!Array.isArray(merged.savedStreams)) {
       merged.savedStreams = [...DEFAULT_STREAMS];
     }
+    if (!Array.isArray(merged.savedYouTube)) {
+      merged.savedYouTube = [];
+    }
 
     return merged;
   } catch {
@@ -65,6 +69,7 @@ export async function loadConfig(): Promise<AppConfig> {
       ...DEFAULT_CONFIG,
       eqGains: [...DEFAULT_EQ_GAINS],
       savedStreams: [...DEFAULT_STREAMS],
+      savedYouTube: [],
     };
   }
 }

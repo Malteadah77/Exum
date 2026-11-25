@@ -1,14 +1,17 @@
 import { contextBridge, ipcRenderer, webUtils } from 'electron';
 import {
   AppConfig,
+  DirectDownloadResult,
   ElectronAPI,
   FloatingWindowType,
   LyricsResult,
   MuseumSkinItem,
   PanelState,
+  RadioStationItem,
   SavedPlaylist,
   ShortcutAction,
   SpotifyAuthState,
+  SpotifyMatchResult,
   SpotifyPlaylistItem,
   SpotifyTrackItem,
   Track,
@@ -52,6 +55,9 @@ const api: ElectronAPI = {
   requestSeekFromLyrics: (seconds: number) => ipcRenderer.send('lyrics:seek', seconds),
   sendExternalTrack: (track: Track, autoPlay: boolean) =>
     ipcRenderer.send('external:addTrack', track, autoPlay),
+  replaceMainPlaylist: (tracks: Track[], label?: string) =>
+    ipcRenderer.send('external:replacePlaylist', tracks, label),
+  pauseLocalAudio: () => ipcRenderer.send('external:pauseLocal'),
   getSyncState: () =>
     ipcRenderer.invoke('sync:getState') as Promise<{
       track: Track | null;
@@ -89,6 +95,16 @@ const api: ElectronAPI = {
       callback(track, autoPlay)
     );
   },
+  onReplacePlaylistReceived: (callback: (tracks: Track[], label?: string) => void) => {
+    ipcRenderer.removeAllListeners('external:replacePlaylist');
+    ipcRenderer.on('external:replacePlaylist', (_event, tracks: Track[], label?: string) =>
+      callback(tracks, label)
+    );
+  },
+  onPauseLocalRequested: (callback: () => void) => {
+    ipcRenderer.removeAllListeners('external:pauseLocal');
+    ipcRenderer.on('external:pauseLocal', () => callback());
+  },
 
   listWszSkins: () => ipcRenderer.invoke('wsz:list') as Promise<WszSkinMeta[]>,
   importWszDialog: () => ipcRenderer.invoke('wsz:importDialog') as Promise<WszSkinData | null>,
@@ -112,6 +128,14 @@ const api: ElectronAPI = {
     ipcRenderer.invoke('spotify:playlists') as Promise<SpotifyPlaylistItem[]>,
   spotifyGetPlaylistTracks: (playlistId: string) =>
     ipcRenderer.invoke('spotify:playlistTracks', playlistId) as Promise<SpotifyTrackItem[]>,
+  matchSpotifyPlaylist: (urlOrId: string) =>
+    ipcRenderer.invoke('spotify:matchPlaylist', urlOrId) as Promise<SpotifyMatchResult>,
+  searchWorldRadios: (query: string) =>
+    ipcRenderer.invoke('external:searchRadios', query) as Promise<RadioStationItem[]>,
+  resolveStreamUrl: (url: string) =>
+    ipcRenderer.invoke('external:resolveStream', url) as Promise<{ url: string; title?: string }>,
+  downloadDirectAudio: (url: string, customName?: string) =>
+    ipcRenderer.invoke('external:downloadAudio', url, customName) as Promise<DirectDownloadResult>,
 
   listSavedPlaylists: () => ipcRenderer.invoke('playlists:list') as Promise<SavedPlaylist[]>,
   saveNamedPlaylist: (name: string, tracks: Track[]) =>
