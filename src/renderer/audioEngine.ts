@@ -1,9 +1,12 @@
+import { EQ_BANDS } from './equalizerPresets.js';
+
 export type PlaybackState = 'idle' | 'playing' | 'paused' | 'stopped';
 
 export interface AudioEngineCallbacks {
   onTimeUpdate?: (currentTime: number, duration: number) => void;
   onStateChange?: (state: PlaybackState) => void;
   onTrackLoaded?: (title: string, duration: number) => void;
+  onAudioGraphReady?: (analyser: AnalyserNode) => void;
   onEnded?: () => void;
   onError?: (message: string) => void;
 }
@@ -21,14 +24,23 @@ export function formatTime(seconds: number): string {
 }
 
 /**
- * Motor de audio desacoplado de la interfaz.
- * En Fase 3 conectaremos este mismo elemento a la Web Audio API (ecualizador y visualizador).
+ * Motor de audio (Patrón Facade) con grafo de Web Audio API:
+ * AudioElement -> MediaElementSource -> 10 BiquadFilterNodes (EQ) -> AnalyserNode -> Destination
  */
 export class AudioEngine {
   private audio: HTMLAudioElement;
   private state: PlaybackState = 'idle';
   private currentTitle = '';
   private callbacks: AudioEngineCallbacks;
+
+  // Nodos de Web Audio API (se crean la primera vez que se reproduce audio)
+  private audioCtx: AudioContext | null = null;
+  private filters: BiquadFilterNode[] = [];
+  private analyser: AnalyserNode | null = null;
+
+  // Estado lógico del ecualizador (se conserva incluso si el EQ está apagado)
+  private eqEnabled = true;
+  private eqGains: number[] = EQ_BANDS.map(() => 0);
 
   constructor(callbacks: AudioEngineCallbacks = {}) {
     this.audio = new Audio();
@@ -58,6 +70,56 @@ export class AudioEngine {
     });
   }
 
+  /**
+   * Construye el grafo de procesamiento de audio una sola vez (lazy init).
+   */
+  private ensureAudioGraph(): void {
+    if (this.audioCtx) return;
+
+    const ctx = new AudioContext();
+    const source = ctx.createMediaElementSource(this.audio);
+
+    // Creamos los 10 filtros de frecuencia en serie
+    this.filters = EQ_BANDS.map((band, index) => {
+      const filter = ctx.createBiquadFilter();
+      if (index === 0) {
+        filter.type = 'lowshelf';
+      } else if (index === EQ_BANDS.length - 1) {
+        filter.type = 'highshelf';
+      } else {
+        filter.type = 'peaking';
+        filter.Q.value = 1.4;
+      }
+      filter.frequency.value = band.freq;
+      filter.gain.value = this.eqEnabled ? this.eqGains[index] : 0;
+      return filter;
+    });
+
+    const analyser = ctx.createAnalyser();
+    analyser.fftSize = 256;
+    analyser.smoothingTimeConstant = 0.8;
+
+    // Encadenamos: source -> filter[0] -> ... -> filter[9] -> analyser -> speakers
+    let currentNode: AudioNode = source;
+    for (const filter of this.filters) {
+      currentNode.connect(filter);
+      currentNode = filter;
+    }
+    currentNode.connect(analyser);
+    analyser.connect(ctx.destination);
+
+    this.audioCtx = ctx;
+    this.analyser = analyser;
+    this.callbacks.onAudioGraphReady?.(analyser);
+  }
+
+  private applyFilterGains(): void {
+    if (this.filters.length === 0) return;
+    this.filters.forEach((filter, idx) => {
+      filter.gain.value = this.eqEnabled ? this.eqGains[idx] : 0;
+    });
+  }
+
   private setState(newState: PlaybackState): void {
     this.state = newState;
     this.callbacks.onStateChange?.(newState);
@@ -73,6 +135,10 @@ export class AudioEngine {
   public async play(): Promise<void> {
     if (!this.audio.src) return;
     try {
+      this.ensureAudioGraph();
+      if (this.audioCtx?.state === 'suspended') {
+        await this.audioCtx.resume();
+      }
       await this.audio.play();
       this.setState('playing');
     } catch {
@@ -120,6 +186,39 @@ export class AudioEngine {
     return this.audio.muted;
   }
 
+  // API del Ecualizador
+  public setEqEnabled(enabled: boolean): void {
+    this.eqEnabled = enabled;
+    this.applyFilterGains();
+  }
+
+  public setBandGain(bandIndex: number, db: number): void {
+    if (bandIndex < 0 || bandIndex >= this.eqGains.length) return;
+    const clamped = Math.max(-12, Math.min(12, db));
+    this.eqGains[bandIndex] = clamped;
+    if (this.filters[bandIndex] && this.eqEnabled) {
+      this.filters[bandIndex].gain.value = clamped;
+    }
+  }
+
+  public setAllBandGains(gains: number[]): void {
+    if (gains.length !== this.eqGains.length) return;
+    this.eqGains = gains.map((g) => Math.max(-12, Math.min(12, g)));
+    this.applyFilterGains();
+  }
+
+  public getEqGains(): number[] {
+    return [...this.eqGains];
+  }
+
+  public get isEqEnabled(): boolean {
+    return this.eqEnabled;
+  }
+
+  public getAnalyser(): AnalyserNode | null {
+    return this.analyser;
+  }
+
   public get hasTrack(): boolean {
     return Boolean(this.audio.src);
   }
@@ -128,5 +227,7 @@ export class AudioEngine {
     return this.audio.muted;
   }
 
-  public get currentTime(): number { return this.audio.currentTime; }
+  public get currentTime(): number {
+    return this.audio.currentTime;
+  }
 }

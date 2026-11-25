@@ -1,6 +1,8 @@
 import type { ElectronAPI, RepeatMode, ThemeName, Track } from '../shared/types.js';
 import { AudioEngine, PlaybackState, formatTime } from './audioEngine.js';
+import { EQ_BANDS, EQ_PRESETS } from './equalizerPresets.js';
 import { PlaylistManager } from './playlistManager.js';
+import { AudioVisualizer } from './visualizer.js';
 
 declare global {
   interface Window {
@@ -12,6 +14,7 @@ declare global {
 const playerShell = document.getElementById('player-shell');
 const dropOverlay = document.getElementById('drop-overlay');
 
+const btnEqPanel = document.getElementById('btn-eq-panel');
 const btnMinimize = document.getElementById('btn-minimize');
 const btnClose = document.getElementById('btn-close');
 const btnTheme = document.getElementById('btn-theme');
@@ -31,6 +34,7 @@ const lcdTime = document.getElementById('lcd-time');
 const trackTitle = document.getElementById('track-title');
 const trackArtist = document.getElementById('track-artist');
 const statusText = document.getElementById('status-text');
+const visualizerCanvas = document.getElementById('visualizer-canvas') as HTMLCanvasElement | null;
 
 const seekBar = document.getElementById('seek-bar') as HTMLInputElement | null;
 const timeCurrent = document.getElementById('time-current');
@@ -38,6 +42,13 @@ const timeTotal = document.getElementById('time-total');
 
 const volumeBar = document.getElementById('volume-bar') as HTMLInputElement | null;
 const volumeValue = document.getElementById('volume-value');
+
+// Referencias del Ecualizador
+const eqPanel = document.getElementById('eq-panel');
+const btnEqToggle = document.getElementById('btn-eq-toggle');
+const eqPresetSelect = document.getElementById('eq-preset-select') as HTMLSelectElement | null;
+const btnEqReset = document.getElementById('btn-eq-reset');
+const eqBandsContainer = document.getElementById('eq-bands-container');
 
 const searchInput = document.getElementById('search-input') as HTMLInputElement | null;
 const playlistCount = document.getElementById('playlist-count');
@@ -48,12 +59,18 @@ let currentThemeIndex = 0;
 let isSeeking = false;
 let searchQuery = '';
 
+const eqSliders: HTMLInputElement[] = [];
+const eqDbLabels: HTMLSpanElement[] = [];
+
 const statusLabels: Record<PlaybackState, string> = {
   idle: 'LISTO',
   playing: 'REPRODUCIENDO',
   paused: 'EN PAUSA',
   stopped: 'DETENIDO',
 };
+
+// Visualizador de espectro
+const visualizer = visualizerCanvas ? new AudioVisualizer(visualizerCanvas) : null;
 
 function formatAudioTechInfo(track: Track | null): string {
   if (!track) return '';
@@ -62,6 +79,11 @@ function formatAudioTechInfo(track: Track | null): string {
   if (track.bitrate) parts.push(`${track.bitrate} kbps`);
   if (track.sampleRate) parts.push(`${(track.sampleRate / 1000).toFixed(1)} kHz`);
   return parts.join(' • ');
+}
+
+function formatDb(value: number): string {
+  if (value > 0) return `+${value}`;
+  return String(value);
 }
 
 function applyTheme(theme: ThemeName): void {
@@ -83,6 +105,71 @@ function updateTransportAvailability(hasTracks: boolean): void {
   if (btnPlay) btnPlay.disabled = !hasTracks;
   if (btnPause) btnPause.disabled = !hasTracks;
   if (btnStop) btnStop.disabled = !hasTracks;
+}
+
+function syncEqUI(enabled: boolean, preset: string, gains: number[]): void {
+  if (btnEqToggle) {
+    btnEqToggle.textContent = enabled ? 'EQ: ON' : 'EQ: OFF';
+    btnEqToggle.classList.toggle('eq-toggle-active', enabled);
+  }
+  eqPanel?.classList.toggle('eq-disabled', !enabled);
+  if (eqPresetSelect) eqPresetSelect.value = preset;
+
+  gains.forEach((db, idx) => {
+    if (eqSliders[idx]) eqSliders[idx].value = String(db);
+    if (eqDbLabels[idx]) eqDbLabels[idx].textContent = formatDb(db);
+  });
+}
+
+function buildEqBandsUI(): void {
+  if (!eqBandsContainer) return;
+  eqBandsContainer.innerHTML = '';
+
+  EQ_BANDS.forEach((band, index) => {
+    const col = document.createElement('div');
+    col.className = 'eq-band';
+
+    const dbLabel = document.createElement('span');
+    dbLabel.className = 'eq-db';
+    dbLabel.textContent = '0';
+
+    const sliderWrap = document.createElement('div');
+    sliderWrap.className = 'eq-slider-wrap';
+
+    const slider = document.createElement('input');
+    slider.type = 'range';
+    slider.className = 'eq-slider';
+    slider.min = '-12';
+    slider.max = '12';
+    slider.step = '1';
+    slider.value = '0';
+    slider.title = `${band.label} Hz`;
+
+    slider.addEventListener('input', () => {
+      const db = Number(slider.value);
+      dbLabel.textContent = formatDb(db);
+      engine.setBandGain(index, db);
+      if (eqPresetSelect) eqPresetSelect.value = 'custom';
+    });
+
+    slider.addEventListener('change', () => {
+      void window.electronAPI.saveConfig({
+        eqPreset: 'custom',
+        eqGains: engine.getEqGains(),
+      });
+    });
+
+    const freqLabel = document.createElement('span');
+    freqLabel.className = 'eq-freq';
+    freqLabel.textContent = band.label;
+
+    sliderWrap.appendChild(slider);
+    col.append(dbLabel, sliderWrap, freqLabel);
+    eqBandsContainer.appendChild(col);
+
+    eqSliders.push(slider);
+    eqDbLabels.push(dbLabel);
+  });
 }
 
 function renderPlaylist(tracks: Track[], activeIndex: number): void {
@@ -174,8 +261,12 @@ function updateModeButtons(shuffle: boolean, repeatMode: RepeatMode): void {
   }
 }
 
-// 1. Motor de audio
+// 1. Motor de audio (Web Audio API + EQ + Analyser)
 const engine = new AudioEngine({
+  onAudioGraphReady: (analyser) => {
+    visualizer?.attachAnalyser(analyser);
+  },
+
   onTrackLoaded: (_title, duration) => {
     if (timeTotal) timeTotal.textContent = formatTime(duration);
     if (seekBar) {
@@ -233,7 +324,15 @@ const playlist = new PlaylistManager({
   },
 });
 
-// Controles de ventana y skin (guardando preferencia en config.json)
+// Construimos los 10 sliders del ecualizador dinámicamente
+buildEqBandsUI();
+
+// Controles de ventana, EQ y skin
+btnEqPanel?.addEventListener('click', () => {
+  const isHidden = eqPanel?.classList.toggle('hidden');
+  btnEqPanel.classList.toggle('active', !isHidden);
+});
+
 btnMinimize?.addEventListener('click', () => window.electronAPI.minimizeWindow());
 btnClose?.addEventListener('click', () => window.electronAPI.closeWindow());
 
@@ -244,6 +343,41 @@ btnTheme?.addEventListener('click', () => {
   if (statusText) {
     statusText.textContent = `SKIN ACTIVA: ${nextTheme.toUpperCase()}`;
   }
+});
+
+// Clic en el visualizador para alternar Barras / Onda / Off
+visualizerCanvas?.addEventListener('click', () => {
+  if (!visualizer) return;
+  const nextMode = visualizer.cycleMode();
+  void window.electronAPI.saveConfig({ visualizerMode: nextMode });
+  if (statusText) {
+    statusText.textContent = `VISUALIZADOR: ${nextMode.toUpperCase()}`;
+  }
+});
+
+// Controles internos del Ecualizador
+btnEqToggle?.addEventListener('click', () => {
+  const nextEnabled = !engine.isEqEnabled;
+  engine.setEqEnabled(nextEnabled);
+  syncEqUI(nextEnabled, eqPresetSelect?.value ?? 'flat', engine.getEqGains());
+  void window.electronAPI.saveConfig({ eqEnabled: nextEnabled });
+});
+
+eqPresetSelect?.addEventListener('change', () => {
+  const presetId = eqPresetSelect.value;
+  const preset = EQ_PRESETS.find((p) => p.id === presetId);
+  if (!preset) return;
+
+  engine.setAllBandGains(preset.gains);
+  syncEqUI(engine.isEqEnabled, preset.id, preset.gains);
+  void window.electronAPI.saveConfig({ eqPreset: preset.id, eqGains: preset.gains });
+});
+
+btnEqReset?.addEventListener('click', () => {
+  const flat = EQ_PRESETS[0];
+  engine.setAllBandGains(flat.gains);
+  syncEqUI(engine.isEqEnabled, flat.id, flat.gains);
+  void window.electronAPI.saveConfig({ eqPreset: flat.id, eqGains: flat.gains });
 });
 
 // Elegir carpeta dedicada de biblioteca local
@@ -304,7 +438,7 @@ seekBar?.addEventListener('change', () => {
   isSeeking = false;
 });
 
-// Volumen y silencio (guardando volumen al soltar)
+// Volumen y silencio
 volumeBar?.addEventListener('input', () => {
   updateVolumeUI(Number(volumeBar.value));
 });
@@ -324,7 +458,7 @@ searchInput?.addEventListener('input', () => {
   renderPlaylist(playlist.allTracks, playlist.activeIndex);
 });
 
-// Drag & Drop de archivos o carpetas sobre la ventana
+// Drag & Drop de archivos o carpetas
 let dragDepth = 0;
 
 playerShell?.addEventListener('dragenter', (event) => {
@@ -367,7 +501,7 @@ playerShell?.addEventListener('drop', async (event) => {
   }
 });
 
-// Atajos de teclado (ignorados cuando escribes en el buscador)
+// Atajos de teclado
 window.addEventListener('keydown', (event) => {
   if (document.activeElement === searchInput) return;
   if (!engine.hasTrack) return;
@@ -384,12 +518,18 @@ window.addEventListener('keydown', (event) => {
   }
 });
 
-// Inicialización al arrancar Exum: restaura tu config.json y tu carpeta de música
+// Inicialización al arrancar Exum
 async function bootstrap(): Promise<void> {
   const config = await window.electronAPI.loadConfig();
   applyTheme(config.theme);
   updateVolumeUI(config.volume);
   playlist.setModes(config.shuffle, config.repeatMode);
+
+  // Restaurar Ecualizador y Visualizador
+  engine.setEqEnabled(config.eqEnabled);
+  engine.setAllBandGains(config.eqGains);
+  syncEqUI(config.eqEnabled, config.eqPreset, config.eqGains);
+  visualizer?.setMode(config.visualizerMode);
 
   if (config.musicFolder) {
     if (statusText) statusText.textContent = 'CARGANDO TU BIBLIOTECA...';

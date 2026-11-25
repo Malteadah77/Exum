@@ -3,12 +3,18 @@ import * as fs from 'fs';
 import * as path from 'path';
 import { AppConfig } from '../shared/types';
 
+const DEFAULT_EQ_GAINS = [0, 0, 0, 0, 0, 0, 0, 0, 0, 0];
+
 const DEFAULT_CONFIG: AppConfig = {
   musicFolder: null,
   theme: 'winamp-classic',
   volume: 80,
   shuffle: false,
   repeatMode: 'off',
+  eqEnabled: true,
+  eqPreset: 'flat',
+  eqGains: [...DEFAULT_EQ_GAINS],
+  visualizerMode: 'bars',
 };
 
 function getConfigPath(): string {
@@ -21,10 +27,16 @@ export async function loadConfig(): Promise<AppConfig> {
   try {
     const raw = await fs.promises.readFile(configPath, 'utf-8');
     const parsed = JSON.parse(raw) as Partial<AppConfig>;
-    return { ...DEFAULT_CONFIG, ...parsed };
+    const merged: AppConfig = { ...DEFAULT_CONFIG, ...parsed };
+
+    // Validación defensiva: garantizamos exactamente 10 bandas numéricas
+    if (!Array.isArray(merged.eqGains) || merged.eqGains.length !== 10) {
+      merged.eqGains = [...DEFAULT_EQ_GAINS];
+    }
+
+    return merged;
   } catch {
-    // Si es la primera vez o el archivo no existe, devolvemos la configuración por defecto
-    return { ...DEFAULT_CONFIG };
+    return { ...DEFAULT_CONFIG, eqGains: [...DEFAULT_EQ_GAINS] };
   }
 }
 

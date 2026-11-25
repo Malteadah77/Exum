@@ -2,6 +2,7 @@
 
 export type ThemeName = 'winamp-classic' | 'modern-dark' | 'minimal-blue';
 export type RepeatMode = 'off' | 'all' | 'one';
+export type VisualizerMode = 'bars' | 'wave' | 'off';
 
 export interface Track {
   id: string;
@@ -23,6 +24,10 @@ export interface AppConfig {
   volume: number; // 0 a 100
   shuffle: boolean;
   repeatMode: RepeatMode;
+  eqEnabled: boolean;
+  eqPreset: string;
+  eqGains: number[]; // 10 bandas en dB (-12 a +12)
+  visualizerMode: VisualizerMode;
 }
 
 export interface ElectronAPI {

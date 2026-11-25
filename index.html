@@ -17,19 +17,30 @@
     <header class="titlebar">
       <div class="titlebar-brand">
         <span class="brand-dot"></span>
-        <span class="brand-title">EXUM v0.2</span>
+        <span class="brand-title">EXUM v0.3</span>
       </div>
       <div class="titlebar-actions">
+        <button id="btn-eq-panel" class="win-btn" title="Mostrar / ocultar ecualizador">EQ</button>
         <button id="btn-theme" class="win-btn" title="Cambiar skin">SKIN</button>
         <button id="btn-minimize" class="win-btn" title="Minimizar">_</button>
         <button id="btn-close" class="win-btn win-btn-close" title="Cerrar">×</button>
       </div>
     </header>
 
-    <!-- Módulo superior: Pantalla LCD y Controles -->
+    <!-- Módulo superior: Pantalla LCD + Visualizador + Controles -->
     <section class="deck-area">
       <div class="lcd-screen">
-        <div id="lcd-time" class="lcd-time">00:00</div>
+        <div class="lcd-left">
+          <div id="lcd-time" class="lcd-time">00:00</div>
+          <canvas
+            id="visualizer-canvas"
+            class="visualizer-canvas"
+            width="132"
+            height="34"
+            title="Clic para cambiar visualizador (Barras / Onda / Off)"
+          ></canvas>
+        </div>
+
         <div class="lcd-info">
           <div id="track-title" class="lcd-track">NINGUNA CANCIÓN CARGADA</div>
           <div id="track-artist" class="lcd-artist">Selecciona una carpeta o arrastra tus MP3 aquí</div>
@@ -80,7 +91,32 @@
       </div>
     </section>
 
-    <!-- Módulo inferior: Biblioteca y Playlist (estilo Winamp Playlist Editor) -->
+    <!-- Módulo central colapsable: Ecualizador de 10 bandas (estilo Winamp) -->
+    <section id="eq-panel" class="eq-panel hidden">
+      <div class="eq-header">
+        <div class="eq-header-left">
+          <button id="btn-eq-toggle" class="tool-btn eq-toggle-active" title="Activar o desactivar ecualizador">
+            EQ: ON
+          </button>
+          <select id="eq-preset-select" class="eq-select" title="Elegir preset de ecualización">
+            <option value="flat">Flat (Plano)</option>
+            <option value="rock">Rock</option>
+            <option value="pop">Pop</option>
+            <option value="bass-boost">Bass Boost</option>
+            <option value="vocal">Vocal</option>
+            <option value="electronic">Electronic</option>
+            <option value="custom">Personalizado</option>
+          </select>
+        </div>
+        <button id="btn-eq-reset" class="tool-btn" title="Restablecer todas las bandas a 0 dB">
+          RESET
+        </button>
+      </div>
+
+      <div id="eq-bands-container" class="eq-bands"></div>
+    </section>
+
+    <!-- Módulo inferior: Biblioteca y Playlist -->
     <section class="playlist-section">
       <div class="playlist-toolbar">
         <div class="playlist-actions">
