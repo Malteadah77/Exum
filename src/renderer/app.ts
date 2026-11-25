@@ -283,6 +283,10 @@ const engine = new AudioEngine({
   },
 
   onEnded: () => playlist.handleTrackEnded(),
+
+  onError: (message) => {
+    classicView?.showTempMarquee(message.toUpperCase());
+  },
 });
 
 // 2. Gestor de Playlist

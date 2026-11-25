@@ -83,9 +83,19 @@ async function collectAudioFilesRecursively(dirPath: string): Promise<string[]> 
   return results;
 }
 
+async function parseTracksInBatches(filePaths: string[], batchSize = 20): Promise<Track[]> {
+  const tracks: Track[] = [];
+  for (let i = 0; i < filePaths.length; i += batchSize) {
+    const chunk = filePaths.slice(i, i + batchSize);
+    const parsed = await Promise.all(chunk.map((fp) => buildTrackFromFile(fp)));
+    tracks.push(...parsed);
+  }
+  return tracks;
+}
+
 export async function scanFolder(folderPath: string): Promise<Track[]> {
   const filePaths = await collectAudioFilesRecursively(folderPath);
-  const tracks = await Promise.all(filePaths.map((fp) => buildTrackFromFile(fp)));
+  const tracks = await parseTracksInBatches(filePaths);
   return tracks.sort((a, b) => a.title.localeCompare(b.title));
 }
 
@@ -108,5 +118,5 @@ export async function readTracksFromPaths(inputPaths: string[]): Promise<Track[]
 
   // Eliminamos duplicados por ruta
   const uniquePaths = Array.from(new Set(audioPaths));
-  return Promise.all(uniquePaths.map((fp) => buildTrackFromFile(fp)));
+  return parseTracksInBatches(uniquePaths);
 }

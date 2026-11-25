@@ -488,7 +488,14 @@ ipcMain.handle('wsz:importPath', async (_event, filePath: string) => {
   return skin;
 });
 
-ipcMain.handle('wsz:load', async (_event, skinId: string) => loadSavedWszSkin(skinId));
+ipcMain.handle('wsz:load', async (_event, skinId: string) => {
+  const skin = await loadSavedWszSkin(skinId);
+  if (skin) {
+    activeSkinId = skin.meta.id;
+    currentPalette = { ...skin.pledit };
+  }
+  return skin;
+});
 
 ipcMain.handle('wsz:select', async (_event, skinId: string | null) => {
   if (!skinId) {
@@ -528,16 +535,29 @@ ipcMain.handle('wsz:downloadMuseum', async (_event, downloadUrl: string, filenam
 ipcMain.handle('config:load', async () => loadConfig());
 ipcMain.handle('config:save', async (_event, partial: Partial<AppConfig>) => saveConfig(partial));
 
-app.whenReady().then(() => {
-  createWindow();
-  registerGlobalShortcuts();
+// Bloqueo de instancia única: evita abrir dos copias de Exum compitiendo por config.json y atajos
+const gotSingleInstanceLock = app.requestSingleInstanceLock();
 
-  app.on('activate', () => {
-    if (BrowserWindow.getAllWindows().length === 0) {
-      createWindow();
-    }
+if (!gotSingleInstanceLock) {
+  app.quit();
+} else {
+  app.on('second-instance', () => {
+    if (!mainWindow) return;
+    if (mainWindow.isMinimized()) mainWindow.restore();
+    mainWindow.focus();
   });
-});
+
+  app.whenReady().then(() => {
+    createWindow();
+    registerGlobalShortcuts();
+
+    app.on('activate', () => {
+      if (BrowserWindow.getAllWindows().length === 0) {
+        createWindow();
+      }
+    });
+  });
+}
 
 app.on('will-quit', () => {
   globalShortcut.unregisterAll();
