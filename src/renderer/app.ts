@@ -31,6 +31,8 @@ const miniRestore = document.getElementById('mini-restore');
 
 // Playlist y barra inferior
 const playlistContainer = document.getElementById('playlist-container');
+const plScrollTrack = document.getElementById('pl-scroll-track');
+const plScrollThumb = document.getElementById('pl-scroll-thumb');
 const playlistCount = document.getElementById('playlist-count');
 const plTotalTimeEl = document.getElementById('pl-total-time');
 const searchInput = document.getElementById('search-input') as HTMLInputElement | null;
@@ -248,7 +250,66 @@ function renderPlaylist(tracks: Track[], activeIndex: number, selectedIndices: S
 
     playlistContainer.appendChild(row);
   }
+  syncWszScrollbar();
 }
+
+// Sincroniza la perilla real de scroll de pledit.bmp (8x18) con el desplazamiento de la lista
+function syncWszScrollbar(): void {
+  if (!playlistContainer || !plScrollTrack || !plScrollThumb) return;
+  const maxScroll = playlistContainer.scrollHeight - playlistContainer.clientHeight;
+  const trackH = plScrollTrack.clientHeight;
+  const thumbH = plScrollThumb.offsetHeight || 18;
+  const maxTravel = Math.max(0, trackH - thumbH);
+
+  if (maxScroll <= 0 || maxTravel <= 0) {
+    plScrollThumb.style.top = '0px';
+    return;
+  }
+  const ratio = Math.max(0, Math.min(1, playlistContainer.scrollTop / maxScroll));
+  plScrollThumb.style.top = `${Math.round(ratio * maxTravel)}px`;
+}
+
+let isDraggingPlThumb = false;
+let dragStartY = 0;
+let dragStartScrollTop = 0;
+
+playlistContainer?.addEventListener('scroll', syncWszScrollbar);
+
+plScrollThumb?.addEventListener('mousedown', (event) => {
+  if (!playlistContainer) return;
+  event.preventDefault();
+  event.stopPropagation();
+  isDraggingPlThumb = true;
+  dragStartY = event.clientY;
+  dragStartScrollTop = playlistContainer.scrollTop;
+  plScrollThumb.classList.add('dragging');
+});
+
+window.addEventListener('mousemove', (event) => {
+  if (!isDraggingPlThumb || !playlistContainer || !plScrollTrack || !plScrollThumb) return;
+  const maxScroll = playlistContainer.scrollHeight - playlistContainer.clientHeight;
+  const rect = plScrollTrack.getBoundingClientRect();
+  const thumbRect = plScrollThumb.getBoundingClientRect();
+  const maxScreenTravel = Math.max(1, rect.height - thumbRect.height);
+  const deltaY = event.clientY - dragStartY;
+  playlistContainer.scrollTop = dragStartScrollTop + (deltaY / maxScreenTravel) * maxScroll;
+  syncWszScrollbar();
+});
+
+window.addEventListener('mouseup', () => {
+  if (!isDraggingPlThumb) return;
+  isDraggingPlThumb = false;
+  plScrollThumb?.classList.remove('dragging');
+});
+
+plScrollTrack?.addEventListener('mousedown', (event) => {
+  if (event.target === plScrollThumb || !playlistContainer || !plScrollTrack) return;
+  const rect = plScrollTrack.getBoundingClientRect();
+  const ratio = Math.max(0, Math.min(1, (event.clientY - rect.top) / Math.max(1, rect.height)));
+  const maxScroll = playlistContainer.scrollHeight - playlistContainer.clientHeight;
+  playlistContainer.scrollTop = ratio * maxScroll;
+  syncWszScrollbar();
+});
 
 function applySkinOrDefault(skin: WszSkinData | null): void {
   if (skin) {
@@ -378,7 +439,10 @@ const classicView = winampDecks
 
 // Escalado proporcional fluido
 window.addEventListener('resize', () => {
-  if (!isMiniMode) classicView?.fitToWindowWidth();
+  if (!isMiniMode) {
+    classicView?.fitToWindowWidth();
+    syncWszScrollbar();
+  }
 });
 
 // Visualizador

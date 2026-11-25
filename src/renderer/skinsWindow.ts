@@ -53,7 +53,7 @@ async function renderSavedSkins(): Promise<void> {
 
     const delBtn = document.createElement('button');
     delBtn.className = 'saved-skin-del';
-    delBtn.textContent = '🗑';
+    delBtn.textContent = '×';
     delBtn.title = `Eliminar ${skin.name}`;
     delBtn.addEventListener('click', async () => {
       await window.electronAPI.deleteWszSkin(skin.id);

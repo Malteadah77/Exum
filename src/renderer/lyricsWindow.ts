@@ -22,7 +22,7 @@ const controller = contentEl
 
 function handleTrack(track: Track | null): void {
   if (titleEl) {
-    titleEl.textContent = track ? `🎤 ${track.title}` : '🎤 EXUM — LETRAS';
+    titleEl.textContent = track ? `EXUM — ${track.title}` : 'EXUM — LETRAS';
   }
   void controller?.loadForTrack(track);
 }

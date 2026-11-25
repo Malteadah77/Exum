@@ -38,17 +38,17 @@
           <button id="wsz-win-close" class="wsz-win-btn" title="Cerrar">×</button>
         </div>
 
-        <!-- Menú desplegable superior izquierdo -->
+        <!-- Menú desplegable superior izquierdo (sin emojis) -->
         <div id="wsz-main-menu" class="wsz-popup-menu main-menu-pos hidden">
-          <button class="wsz-menu-item" data-main-action="skins">🏛️ Skins (.wsz)</button>
-          <button class="wsz-menu-item" data-main-action="lyrics">🎤 Letras (LRC)</button>
-          <button class="wsz-menu-item" data-main-action="sources">🌐 Fuentes (NET)</button>
+          <button class="wsz-menu-item" data-main-action="skins">Skins (.wsz)</button>
+          <button class="wsz-menu-item" data-main-action="lyrics">Letras (LRC)</button>
+          <button class="wsz-menu-item" data-main-action="sources">Fuentes (NET)</button>
           <div class="wsz-menu-sep"></div>
-          <button class="wsz-menu-item" data-main-action="folder">📁 Elegir carpeta</button>
-          <button class="wsz-menu-item" data-main-action="files">+ Agregar archivos</button>
+          <button class="wsz-menu-item" data-main-action="folder">Elegir carpeta</button>
+          <button class="wsz-menu-item" data-main-action="files">Agregar archivos</button>
           <div class="wsz-menu-sep"></div>
-          <button class="wsz-menu-item" data-main-action="pin">📌 Siempre encima</button>
-          <button class="wsz-menu-item" data-main-action="mini">▬ Mini-barra</button>
+          <button class="wsz-menu-item" data-main-action="pin">Siempre encima</button>
+          <button class="wsz-menu-item" data-main-action="mini">Mini-barra</button>
         </div>
 
         <!-- Barra vertical ClutterBar (O A I D V) -->
@@ -64,7 +64,7 @@
         <div id="wsz-playpaus" class="wsz-playpaus state-stopped" title="Estado de reproducción">■</div>
         <span id="wsz-minus" class="wsz-minus hidden">-</span>
 
-        <!-- Reloj clicable (alterna tiempo transcurrido / restante) -->
+        <!-- Reloj clicable -->
         <div id="wsz-clock" class="wsz-clock" title="Clic para alternar tiempo transcurrido / restante">
           <span id="wsz-d0" class="wsz-digit">0</span>
           <span class="wsz-digit-gap"></span>
@@ -83,7 +83,7 @@
           title="Clic para cambiar visualizador (Barras / Onda / Off)"
         ></canvas>
 
-        <!-- Marquee con scroll horizontal y feedback temporal -->
+        <!-- Marquee -->
         <div id="wsz-track-title" class="wsz-track-title">
           <span id="wsz-marquee-text" class="wsz-marquee-text">EXUM — ARRASTRA MP3 O ELIGE CARPETA</span>
         </div>
@@ -135,7 +135,6 @@
         <button id="wsz-eq-min" class="wsz-panel-min-btn" title="Resumir / expandir Ecualizador (Shade)">▬</button>
         <button id="wsz-eq-close" class="wsz-panel-close-btn" title="Cerrar Ecualizador">×</button>
 
-        <!-- Controles exclusivos de EQ Resumido (Shade Mode 275x14) -->
         <div class="wsz-eq-shade-controls">
           <div class="wsz-eq-shade-vol">
             <div id="wsz-eq-shade-vol-thumb" class="wsz-eq-shade-thumb"></div>
@@ -157,9 +156,9 @@
       </div>
     </div>
 
-    <!-- 3. Playlist fluida + barra clásica pledit.bmp + modo resumido (Shade 275x14) -->
+    <!-- 3. Playlist con marco 9-slice fiel de pledit.bmp y barra de scroll .wsz real -->
     <section id="playlist-section" class="playlist-section normal-only">
-      <!-- Barra resumida de Playlist (275x14 escalada cuando se presiona minimizar PL) -->
+      <!-- Barra resumida de Playlist (275x14 en Shade Mode) -->
       <div id="pl-shade-scale-wrap" class="pl-shade-scale-wrap">
         <div class="pl-shade-bar">
           <div class="pl-shade-left"></div>
@@ -172,18 +171,33 @@
         </div>
       </div>
 
-      <div class="playlist-header pl-full-only">
-        <span class="playlist-title-fallback">EXUM PLAYLIST</span>
-        <div class="playlist-header-right">
-          <span id="playlist-count" class="playlist-count-pill">0 pistas</span>
-          <button id="pl-win-min" class="pl-win-ctrl" title="Resumir Playlist (Shade)">▬</button>
-          <button id="pl-win-close" class="pl-win-ctrl" title="Cerrar Playlist">×</button>
+      <!-- Cabecera fiel de pledit.bmp (275x20 escalada: 5 piezas sin repetir títulos) -->
+      <div id="pl-top-scale-wrap" class="pl-top-scale-wrap pl-full-only">
+        <div class="pl-top-bar">
+          <div class="pl-top-left"></div>
+          <div class="pl-top-fill-left"></div>
+          <div class="pl-top-title"></div>
+          <div class="pl-top-fill-right"></div>
+          <div class="pl-top-right"></div>
+          <span class="pl-top-fallback-title">EXUM PLAYLIST</span>
+          <span id="playlist-count" class="pl-top-fallback-count">0 pistas</span>
+          <button id="pl-win-min" class="wsz-panel-min-btn" title="Resumir Playlist (Shade)">▬</button>
+          <button id="pl-win-close" class="wsz-panel-close-btn" title="Cerrar Playlist">×</button>
         </div>
       </div>
 
-      <div id="playlist-container" class="playlist-list pl-full-only">
-        <div class="playlist-empty">
-          Arrastra archivos de música o skins <strong>.wsz</strong> aquí, o presiona <strong>ADD</strong>.
+      <!-- Cuadrícula central con bordes laterales y barra de scroll reales de pledit.bmp -->
+      <div class="pl-middle-frame pl-full-only">
+        <div id="pl-side-left" class="pl-side-left"></div>
+        <div id="playlist-container" class="playlist-list">
+          <div class="playlist-empty">
+            Arrastra archivos de música o skins <strong>.wsz</strong> aquí, o usa <strong>ADD</strong>.
+          </div>
+        </div>
+        <div id="pl-side-right" class="pl-side-right">
+          <div id="pl-scroll-track" class="pl-scroll-track" title="Desplazar lista de canciones">
+            <div id="pl-scroll-thumb" class="pl-scroll-thumb"></div>
+          </div>
         </div>
       </div>
 
@@ -193,16 +207,13 @@
           <div class="pl-classic-left"></div>
           <div class="pl-classic-right"></div>
 
-          <!-- Botones ADD / REM / SEL / MISC -->
           <button id="pl-btn-add" class="pl-sprite-btn" title="Agregar (Archivos / Carpeta / URL)">ADD</button>
           <button id="pl-btn-rem" class="pl-sprite-btn" title="Quitar / Recortar / Limpiar">REM</button>
           <button id="pl-btn-sel" class="pl-sprite-btn" title="Seleccionar pistas">SEL</button>
           <button id="pl-btn-misc" class="pl-sprite-btn" title="Ordenar / Mezclar / Invertir">MISC</button>
 
-          <!-- Tiempo pista actual / total playlist -->
           <div id="pl-total-time" class="pl-total-time">00:00/00:00</div>
 
-          <!-- Mini transporte dentro de pledit.bmp -->
           <div class="pl-mini-transport">
             <button id="pl-mini-prev" class="pl-mini-btn" title="Anterior">⏮</button>
             <button id="pl-mini-play" class="pl-mini-btn" title="Play">▶</button>
@@ -212,14 +223,13 @@
             <button id="pl-mini-eject" class="pl-mini-btn" title="Abrir archivos">⏏</button>
           </div>
 
-          <!-- Botón LIST OPTS -->
           <button id="pl-btn-list" class="pl-sprite-btn" title="Playlists guardadas y .m3u">LIST</button>
 
-          <!-- Menús emergentes de Playlist (se abren hacia arriba) -->
+          <!-- Menús emergentes de Playlist (sin emojis) -->
           <div id="pl-menu-add" class="wsz-popup-menu pl-menu-up hidden" style="left: 11px;">
-            <button class="wsz-menu-item" data-pl-action="add-files">+ Agregar archivos</button>
-            <button class="wsz-menu-item" data-pl-action="add-folder">📁 Elegir carpeta</button>
-            <button class="wsz-menu-item" data-pl-action="add-url">🌐 Stream / Radio (NET)</button>
+            <button class="wsz-menu-item" data-pl-action="add-files">Agregar archivos</button>
+            <button class="wsz-menu-item" data-pl-action="add-folder">Elegir carpeta</button>
+            <button class="wsz-menu-item" data-pl-action="add-url">Stream / Radio (NET)</button>
           </div>
 
           <div id="pl-menu-rem" class="wsz-popup-menu pl-menu-up hidden" style="left: 40px;">
@@ -247,13 +257,13 @@
           <div id="pl-menu-list" class="wsz-popup-menu pl-menu-up pl-menu-right hidden">
             <div class="pl-save-inline">
               <input id="pl-save-name" class="pl-save-input" type="text" placeholder="Nombre de playlist..." />
-              <button id="pl-save-confirm" class="pl-save-go" title="Guardar playlist">💾</button>
+              <button id="pl-save-confirm" class="pl-save-go" title="Guardar playlist">OK</button>
             </div>
             <div id="pl-saved-items" class="pl-saved-items"></div>
             <div class="wsz-menu-sep"></div>
             <button class="wsz-menu-item" data-pl-action="list-new">Nueva lista vacía</button>
-            <button class="wsz-menu-item" data-pl-action="list-import">📂 Importar .m3u</button>
-            <button class="wsz-menu-item" data-pl-action="list-export">💾 Exportar .m3u</button>
+            <button class="wsz-menu-item" data-pl-action="list-import">Importar .m3u</button>
+            <button class="wsz-menu-item" data-pl-action="list-export">Exportar .m3u</button>
           </div>
         </div>
       </div>

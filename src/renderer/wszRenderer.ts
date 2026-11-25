@@ -140,6 +140,9 @@ export class WszClassicView {
   private presetsMenu: HTMLElement | null;
   private mainMenuBtn: HTMLElement | null;
   private mainMenu: HTMLElement | null;
+  private plTopScaleWrap: HTMLElement | null;
+  private plSideLeft: HTMLElement | null;
+  private plSideRight: HTMLElement | null;
   private plClassicScaleWrap: HTMLElement | null;
   private plShadeScaleWrap: HTMLElement | null;
   private plShadeTrackEl: HTMLElement | null;
@@ -193,6 +196,9 @@ export class WszClassicView {
     this.presetsMenu = document.getElementById('wsz-presets-menu');
     this.mainMenuBtn = document.getElementById('wsz-main-menu-btn');
     this.mainMenu = document.getElementById('wsz-main-menu');
+    this.plTopScaleWrap = document.getElementById('pl-top-scale-wrap');
+    this.plSideLeft = document.getElementById('pl-side-left');
+    this.plSideRight = document.getElementById('pl-side-right');
     this.plClassicScaleWrap = document.getElementById('pl-classic-scale-wrap');
     this.plShadeScaleWrap = document.getElementById('pl-shade-scale-wrap');
     this.plShadeTrackEl = document.getElementById('pl-shade-track');
@@ -213,13 +219,42 @@ export class WszClassicView {
 
   public fitToWindowWidth(): void {
     const scale = Math.max(1, Math.min(2.5, window.innerWidth / 275));
-    (this.stage.style as unknown as Record<string, string>).zoom = String(scale);
+    const z = String(scale);
+    (this.stage.style as unknown as Record<string, string>).zoom = z;
+    if (this.plTopScaleWrap) (this.plTopScaleWrap.style as unknown as Record<string, string>).zoom = z;
+    if (this.plSideLeft) (this.plSideLeft.style as unknown as Record<string, string>).zoom = z;
+    if (this.plSideRight) (this.plSideRight.style as unknown as Record<string, string>).zoom = z;
     if (this.plClassicScaleWrap) {
-      (this.plClassicScaleWrap.style as unknown as Record<string, string>).zoom = String(scale);
+      (this.plClassicScaleWrap.style as unknown as Record<string, string>).zoom = z;
     }
     if (this.plShadeScaleWrap) {
-      (this.plShadeScaleWrap.style as unknown as Record<string, string>).zoom = String(scale);
+      (this.plShadeScaleWrap.style as unknown as Record<string, string>).zoom = z;
     }
+  }
+
+  /**
+   * Recorta los mosaicos exactos de pledit.bmp en <canvas> para que repeat-x / repeat-y
+   * no mezcle otras partes del sprite sheet (técnica estándar de Webamp).
+   */
+  private extractPleditTiles(pleditDataUrl: string): void {
+    const img = new Image();
+    img.onload = () => {
+      const crop = (sx: number, sy: number, sw: number, sh: number): string => {
+        const c = document.createElement('canvas');
+        c.width = sw;
+        c.height = sh;
+        const ctx = c.getContext('2d');
+        if (ctx) ctx.drawImage(img, sx, sy, sw, sh, 0, 0, sw, sh);
+        return `url("${c.toDataURL()}")`;
+      };
+
+      const root = document.documentElement.style;
+      root.setProperty('--wsz-pl-top-fill', crop(127, 0, 25, 20));
+      root.setProperty('--wsz-pl-left-tile', crop(0, 42, 12, 29));
+      root.setProperty('--wsz-pl-right-tile', crop(31, 42, 20, 29));
+      root.setProperty('--wsz-pl-shade-mid', crop(72, 57, 25, 14));
+    };
+    img.src = pleditDataUrl;
   }
 
   public setEqPanelState(state: PanelState): void {
@@ -599,8 +634,13 @@ export class WszClassicView {
 
     if (skin.sprites.pledit) {
       document.documentElement.style.setProperty('--wsz-pledit', `url("${skin.sprites.pledit}")`);
+      this.extractPleditTiles(skin.sprites.pledit);
     } else {
       document.documentElement.style.removeProperty('--wsz-pledit');
+      document.documentElement.style.removeProperty('--wsz-pl-top-fill');
+      document.documentElement.style.removeProperty('--wsz-pl-left-tile');
+      document.documentElement.style.removeProperty('--wsz-pl-right-tile');
+      document.documentElement.style.removeProperty('--wsz-pl-shade-mid');
     }
 
     applyPaletteToDocument(skin.pledit);
@@ -616,6 +656,10 @@ export class WszClassicView {
       this.stage.style.removeProperty(cssVar);
     }
     document.documentElement.style.removeProperty('--wsz-pledit');
+    document.documentElement.style.removeProperty('--wsz-pl-top-fill');
+    document.documentElement.style.removeProperty('--wsz-pl-left-tile');
+    document.documentElement.style.removeProperty('--wsz-pl-right-tile');
+    document.documentElement.style.removeProperty('--wsz-pl-shade-mid');
     applyPaletteToDocument(DEFAULT_PALETTE);
     this.stage.classList.remove('has-wsz-skin', 'has-numbers-sprite');
     document.body.classList.remove('has-wsz-skin');

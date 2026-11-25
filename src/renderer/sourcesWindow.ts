@@ -130,7 +130,7 @@ async function searchRadios(query: string): Promise<void> {
 
     const playBtn = document.createElement('button');
     playBtn.className = 'float-btn';
-    playBtn.textContent = '▶';
+    playBtn.textContent = 'Play';
     playBtn.title = 'Escuchar en Exum (con EQ y Visualizador)';
     playBtn.addEventListener('click', () => {
       window.electronAPI.sendExternalTrack(
@@ -141,7 +141,7 @@ async function searchRadios(query: string): Promise<void> {
 
     const favBtn = document.createElement('button');
     favBtn.className = 'float-btn';
-    favBtn.textContent = '★';
+    favBtn.textContent = '+Fav';
     favBtn.title = 'Guardar en favoritos (URL/.m3u)';
     favBtn.addEventListener('click', async () => {
       if (!savedStreams.some((s) => s.url === st.url)) {
@@ -193,7 +193,7 @@ function renderStreams(): void {
 
     const playBtn = document.createElement('button');
     playBtn.className = 'float-btn';
-    playBtn.textContent = '▶';
+    playBtn.textContent = 'Play';
     playBtn.title = 'Reproducir en Exum';
     playBtn.addEventListener('click', () => {
       window.electronAPI.sendExternalTrack(buildStreamTrack(stream.name, stream.url, stream.genre), true);
@@ -201,7 +201,7 @@ function renderStreams(): void {
 
     const delBtn = document.createElement('button');
     delBtn.className = 'saved-skin-del';
-    delBtn.textContent = '🗑';
+    delBtn.textContent = '×';
     delBtn.title = 'Eliminar';
     delBtn.addEventListener('click', async () => {
       savedStreams = savedStreams.filter((s) => s.id !== stream.id);
@@ -300,12 +300,12 @@ function renderSavedYouTube(): void {
 
     const playBtn = document.createElement('button');
     playBtn.className = 'float-btn';
-    playBtn.textContent = '▶';
+    playBtn.textContent = 'Play';
     playBtn.addEventListener('click', () => playYouTubeItem(item));
 
     const delBtn = document.createElement('button');
     delBtn.className = 'saved-skin-del';
-    delBtn.textContent = '🗑';
+    delBtn.textContent = '×';
     delBtn.addEventListener('click', async () => {
       savedYouTube = savedYouTube.filter((y) => y.id !== item.id);
       await window.electronAPI.saveConfig({ savedYouTube });
@@ -381,7 +381,7 @@ function renderSpotifyMatchResult(res: SpotifyMatchResult): void {
     if (t.previewUrl) {
       const playBtn = document.createElement('button');
       playBtn.className = 'float-btn';
-      playBtn.textContent = '▶ Preview';
+      playBtn.textContent = 'Preview';
       playBtn.addEventListener('click', () => {
         window.electronAPI.sendExternalTrack(
           {
@@ -406,7 +406,7 @@ function renderSpotifyMatchResult(res: SpotifyMatchResult): void {
     if (t.externalUrl) {
       const extBtn = document.createElement('button');
       extBtn.className = 'float-btn';
-      extBtn.textContent = '↗ Spotify';
+      extBtn.textContent = 'Spotify';
       extBtn.addEventListener('click', () => void window.electronAPI.openExternalUrl(t.externalUrl));
       actions.appendChild(extBtn);
     }
