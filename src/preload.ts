@@ -1,7 +1,9 @@
 import { contextBridge, ipcRenderer, webUtils } from 'electron';
 import {
   AppConfig,
+  ArchiveAlbumItem,
   DirectDownloadResult,
+  DiscoverTrackItem,
   ElectronAPI,
   FloatingWindowType,
   LyricsResult,
@@ -10,10 +12,6 @@ import {
   RadioStationItem,
   SavedPlaylist,
   ShortcutAction,
-  SpotifyAuthState,
-  SpotifyMatchResult,
-  SpotifyPlaylistItem,
-  SpotifyTrackItem,
   Track,
   WszPleditColors,
   WszSkinData,
@@ -39,6 +37,8 @@ const api: ElectronAPI = {
     ipcRenderer.invoke('dialog:selectFolder') as Promise<{ folderPath: string; tracks: Track[] } | null>,
   scanFolder: (folderPath: string) =>
     ipcRenderer.invoke('library:scanFolder', folderPath) as Promise<Track[]>,
+  scanFolderWithCovers: (folderPath: string) =>
+    ipcRenderer.invoke('library:scanWithCovers', folderPath) as Promise<Track[]>,
   readDroppedPaths: (paths: string[]) =>
     ipcRenderer.invoke('library:readPaths', paths) as Promise<Track[]>,
   getPathForFile: (file: File) => webUtils.getPathForFile(file),
@@ -57,7 +57,6 @@ const api: ElectronAPI = {
     ipcRenderer.send('external:addTrack', track, autoPlay),
   replaceMainPlaylist: (tracks: Track[], label?: string) =>
     ipcRenderer.send('external:replacePlaylist', tracks, label),
-  pauseLocalAudio: () => ipcRenderer.send('external:pauseLocal'),
   getSyncState: () =>
     ipcRenderer.invoke('sync:getState') as Promise<{
       track: Track | null;
@@ -101,10 +100,6 @@ const api: ElectronAPI = {
       callback(tracks, label)
     );
   },
-  onPauseLocalRequested: (callback: () => void) => {
-    ipcRenderer.removeAllListeners('external:pauseLocal');
-    ipcRenderer.on('external:pauseLocal', () => callback());
-  },
 
   listWszSkins: () => ipcRenderer.invoke('wsz:list') as Promise<WszSkinMeta[]>,
   importWszDialog: () => ipcRenderer.invoke('wsz:importDialog') as Promise<WszSkinData | null>,
@@ -120,16 +115,14 @@ const api: ElectronAPI = {
   downloadMuseumSkin: (downloadUrl: string, filename: string) =>
     ipcRenderer.invoke('wsz:downloadMuseum', downloadUrl, filename) as Promise<WszSkinData | null>,
 
-  spotifyGetState: () => ipcRenderer.invoke('spotify:state') as Promise<SpotifyAuthState>,
-  spotifyConnect: (clientId: string) =>
-    ipcRenderer.invoke('spotify:connect', clientId) as Promise<SpotifyAuthState>,
-  spotifyDisconnect: () => ipcRenderer.invoke('spotify:disconnect') as Promise<SpotifyAuthState>,
-  spotifyListPlaylists: () =>
-    ipcRenderer.invoke('spotify:playlists') as Promise<SpotifyPlaylistItem[]>,
-  spotifyGetPlaylistTracks: (playlistId: string) =>
-    ipcRenderer.invoke('spotify:playlistTracks', playlistId) as Promise<SpotifyTrackItem[]>,
-  matchSpotifyPlaylist: (urlOrId: string) =>
-    ipcRenderer.invoke('spotify:matchPlaylist', urlOrId) as Promise<SpotifyMatchResult>,
+  searchAudius: (query: string) =>
+    ipcRenderer.invoke('external:searchAudius', query) as Promise<DiscoverTrackItem[]>,
+  searchArchiveAlbums: (query: string) =>
+    ipcRenderer.invoke('external:searchArchive', query) as Promise<ArchiveAlbumItem[]>,
+  getArchiveAlbumTracks: (identifier: string, albumTitle: string, creator: string) =>
+    ipcRenderer.invoke('external:archiveTracks', identifier, albumTitle, creator) as Promise<
+      DiscoverTrackItem[]
+    >,
   searchWorldRadios: (query: string) =>
     ipcRenderer.invoke('external:searchRadios', query) as Promise<RadioStationItem[]>,
   resolveStreamUrl: (url: string) =>

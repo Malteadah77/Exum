@@ -2,16 +2,13 @@ import { BrowserWindow, dialog } from 'electron';
 import * as fs from 'fs';
 import * as path from 'path';
 import {
+  ArchiveAlbumItem,
   DirectDownloadResult,
+  DiscoverTrackItem,
   RadioStationItem,
-  SpotifyMatchResult,
-  SpotifyTrackItem,
-  Track,
 } from '../shared/types';
 import { loadConfig, saveConfig } from './configStore';
-import { buildTrackFromFile, scanFolder } from './libraryScanner';
-import { saveNamedPlaylist } from './playlistStore';
-import { getSpotifyPlaylistDetails, getSpotifyState } from './spotifyService';
+import { buildTrackFromFile } from './libraryScanner';
 
 const RADIO_BROWSER_MIRRORS = [
   'https://de1.api.radio-browser.info',
@@ -19,6 +16,7 @@ const RADIO_BROWSER_MIRRORS = [
   'https://nl1.api.radio-browser.info',
 ];
 
+const AUDIUS_API = 'https://api.audius.co/v1';
 const DIRECT_AUDIO_EXTS = new Set(['.mp3', '.wav', '.flac', '.ogg', '.m4a', '.aac']);
 const MIME_TO_EXT: Record<string, string> = {
   'audio/mpeg': '.mp3',
@@ -31,6 +29,150 @@ const MIME_TO_EXT: Record<string, string> = {
   'audio/aac': '.aac',
 };
 
+// ---------- 1. AUDIUS (MÚSICA LIBRE ABIERTA, CERO CUENTAS, 206 MP3 + CORS *) ----------
+interface RawAudiusTrack {
+  id?: string;
+  title?: string;
+  duration?: number;
+  genre?: string;
+  is_streamable?: boolean;
+  is_stream_gated?: boolean;
+  is_downloadable?: boolean;
+  artwork?: { '150x150'?: string };
+  user?: { name?: string };
+}
+
+export async function searchAudiusTracks(query: string): Promise<DiscoverTrackItem[]> {
+  const trimmed = query.trim();
+  const endpoint = trimmed
+    ? `${AUDIUS_API}/tracks/search?query=${encodeURIComponent(trimmed)}&app_name=ExumPlayer`
+    : `${AUDIUS_API}/tracks/trending?app_name=ExumPlayer`;
+
+  try {
+    const res = await fetch(endpoint, { headers: { 'User-Agent': 'ExumPlayer/1.1' } });
+    if (!res.ok) return [];
+    const json = (await res.json()) as { data?: RawAudiusTrack[] };
+    const list = Array.isArray(json.data) ? json.data : [];
+
+    return list
+      .filter((t) => Boolean(t.id && t.title && t.is_streamable !== false && !t.is_stream_gated))
+      .slice(0, 25)
+      .map((t) => {
+        const streamUrl = `${AUDIUS_API}/tracks/${encodeURIComponent(t.id!)}/stream?app_name=ExumPlayer`;
+        return {
+          id: `audius:${t.id}`,
+          source: 'audius' as const,
+          title: t.title!.trim(),
+          artist: t.user?.name?.trim() || 'Artista Audius',
+          album: t.genre || 'Audius',
+          duration: Math.round(t.duration || 0),
+          genre: t.genre || 'Libre',
+          streamUrl,
+          downloadUrl: t.is_downloadable ? streamUrl : undefined,
+          artworkUrl: t.artwork?.['150x150'],
+        };
+      });
+  } catch {
+    return [];
+  }
+}
+
+// ---------- 2. INTERNET ARCHIVE (NETLABELS & CREATIVE COMMONS — STREAM + DESCARGA MP3) ----------
+interface RawArchiveDoc {
+  identifier?: string;
+  title?: string;
+  creator?: string | string[];
+}
+
+export async function searchArchiveAlbums(query: string): Promise<ArchiveAlbumItem[]> {
+  const trimmed = query.trim();
+  const searchPart = trimmed
+    ? `collection:(netlabels OR opensource_audio) AND mediatype:audio AND format:"VBR MP3" AND (${trimmed})`
+    : `collection:(netlabels OR opensource_audio) AND mediatype:audio AND format:"VBR MP3"`;
+
+  try {
+    const url =
+      `https://archive.org/advancedsearch.php?q=${encodeURIComponent(searchPart)}` +
+      `&fl[]=identifier&fl[]=title&fl[]=creator&sort[]=downloads+desc&rows=20&output=json`;
+    const res = await fetch(url, { headers: { 'User-Agent': 'ExumPlayer/1.1' } });
+    if (!res.ok) return [];
+
+    const json = (await res.json()) as { response?: { docs?: RawArchiveDoc[] } };
+    const docs = json.response?.docs ?? [];
+
+    return docs
+      .filter((d) => Boolean(d.identifier && d.title))
+      .map((d) => ({
+        identifier: d.identifier!,
+        title: d.title!.trim(),
+        creator: Array.isArray(d.creator) ? d.creator.join(', ') : d.creator || 'Internet Archive',
+        artworkUrl: `https://archive.org/services/img/${encodeURIComponent(d.identifier!)}`,
+      }));
+  } catch {
+    return [];
+  }
+}
+
+interface RawArchiveFile {
+  name?: string;
+  title?: string;
+  artist?: string;
+  length?: string;
+}
+
+function parseArchiveDuration(raw?: string): number {
+  if (!raw) return 0;
+  if (raw.includes(':')) {
+    const parts = raw.split(':').map(Number);
+    if (parts.length === 2) return parts[0] * 60 + parts[1];
+    if (parts.length === 3) return parts[0] * 3600 + parts[1] * 60 + parts[2];
+  }
+  const num = Number(raw);
+  return Number.isFinite(num) ? Math.round(num) : 0;
+}
+
+export async function getArchiveAlbumTracks(
+  identifier: string,
+  albumTitle: string,
+  creator: string
+): Promise<DiscoverTrackItem[]> {
+  try {
+    const res = await fetch(
+      `https://archive.org/metadata/${encodeURIComponent(identifier)}/files`,
+      { headers: { 'User-Agent': 'ExumPlayer/1.1' } }
+    );
+    if (!res.ok) return [];
+
+    const json = (await res.json()) as { result?: RawArchiveFile[] };
+    const files = (json.result ?? []).filter(
+      (f) => f.name && f.name.toLowerCase().endsWith('.mp3') && !f.name.includes('_64kb')
+    );
+
+    const artworkUrl = `https://archive.org/services/img/${encodeURIComponent(identifier)}`;
+
+    return files.slice(0, 40).map((f) => {
+      const encodedName = f.name!.split('/').map(encodeURIComponent).join('/');
+      const url = `https://archive.org/download/${encodeURIComponent(identifier)}/${encodedName}`;
+      const cleanName = f.title?.trim() || path.parse(f.name!).name.replace(/[_-]+/g, ' ');
+      return {
+        id: `archive:${identifier}:${f.name}`,
+        source: 'archive' as const,
+        title: cleanName,
+        artist: f.artist?.trim() || creator || 'Internet Archive',
+        album: albumTitle,
+        duration: parseArchiveDuration(f.length),
+        genre: 'Archive CC',
+        streamUrl: url,
+        downloadUrl: url,
+        artworkUrl,
+      };
+    });
+  } catch {
+    return [];
+  }
+}
+
+// ---------- 3. RADIO BROWSER (+30,000 EMISORAS DEL MUNDO) ----------
 interface RawRadioStation {
   stationuuid?: string;
   name?: string;
@@ -42,9 +184,6 @@ interface RawRadioStation {
   codec?: string;
 }
 
-/**
- * Busca entre +30,000 radios abiertas en la API comunitaria gratuita Radio Browser.
- */
 export async function searchWorldRadios(query: string): Promise<RadioStationItem[]> {
   const trimmed = query.trim();
 
@@ -54,16 +193,14 @@ export async function searchWorldRadios(query: string): Promise<RadioStationItem
         ? `${base}/json/stations/search?name=${encodeURIComponent(trimmed)}&hidebroken=true&order=clickcount&reverse=true&limit=24`
         : `${base}/json/stations/topclick/24?hidebroken=true`;
 
-      // Si el usuario buscó un género/tag (ej. "lofi", "synthwave") y por nombre hay pocos,
-      // hacemos búsqueda por tag en paralelo y combinamos sin duplicados.
       const requests: Promise<Response>[] = [
-        fetch(endpoint, { headers: { 'User-Agent': 'ExumPlayer/0.8' } }),
+        fetch(endpoint, { headers: { 'User-Agent': 'ExumPlayer/1.1' } }),
       ];
       if (trimmed) {
         requests.push(
           fetch(
             `${base}/json/stations/bytag/${encodeURIComponent(trimmed.toLowerCase())}?hidebroken=true&order=clickcount&reverse=true&limit=20`,
-            { headers: { 'User-Agent': 'ExumPlayer/0.8' } }
+            { headers: { 'User-Agent': 'ExumPlayer/1.1' } }
           )
         );
       }
@@ -103,28 +240,24 @@ export async function searchWorldRadios(query: string): Promise<RadioStationItem
 
       return stations;
     } catch {
-      // Probamos el siguiente espejo de Radio Browser
+      // Probamos el siguiente espejo
     }
   }
 
   return [];
 }
 
-/**
- * Resuelve URLs de playlist de radio (.m3u / .m3u8 / .pls) a su URL directa de audio.
- */
+// ---------- 4. RESOLVER .m3u / .pls Y DESCARGA DE AUDIO DIRECTO ABIERTO ----------
 export async function resolveStreamUrl(rawUrl: string): Promise<{ url: string; title?: string }> {
   const cleanUrl = rawUrl.trim();
   const lower = cleanUrl.toLowerCase().split('?')[0];
   const isPlaylistUrl =
     lower.endsWith('.m3u') || lower.endsWith('.m3u8') || lower.endsWith('.pls');
 
-  if (!isPlaylistUrl) {
-    return { url: cleanUrl };
-  }
+  if (!isPlaylistUrl) return { url: cleanUrl };
 
   try {
-    const res = await fetch(cleanUrl, { headers: { 'User-Agent': 'ExumPlayer/0.8' } });
+    const res = await fetch(cleanUrl, { headers: { 'User-Agent': 'ExumPlayer/1.1' } });
     if (!res.ok) return { url: cleanUrl };
     const text = await res.text();
 
@@ -132,10 +265,7 @@ export async function resolveStreamUrl(rawUrl: string): Promise<{ url: string; t
       const fileMatch = text.match(/^File1\s*=\s*(.+)$/im);
       const titleMatch = text.match(/^Title1\s*=\s*(.+)$/im);
       if (fileMatch?.[1]) {
-        return {
-          url: fileMatch[1].trim(),
-          title: titleMatch?.[1]?.trim(),
-        };
+        return { url: fileMatch[1].trim(), title: titleMatch?.[1]?.trim() };
       }
     } else {
       let extTitle: string | undefined;
@@ -153,7 +283,7 @@ export async function resolveStreamUrl(rawUrl: string): Promise<{ url: string; t
       }
     }
   } catch {
-    // Fallback a la URL original
+    // Fallback
   }
 
   return { url: cleanUrl };
@@ -163,10 +293,6 @@ function sanitizeFileName(name: string): string {
   return name.replace(/[<>:"/\\|?*]+/g, '_').trim();
 }
 
-/**
- * Descarga un archivo de audio directo abierto (URL .mp3/.wav/.flac/.ogg/.m4a)
- * en la carpeta local de música configurada del usuario.
- */
 export async function downloadDirectAudioToLibrary(
   rawUrl: string,
   customName: string | undefined,
@@ -179,7 +305,7 @@ export async function downloadDirectAudioToLibrary(
 
   try {
     const resolved = await resolveStreamUrl(cleanUrl);
-    const res = await fetch(resolved.url, { headers: { 'User-Agent': 'ExumPlayer/0.8' } });
+    const res = await fetch(resolved.url, { headers: { 'User-Agent': 'ExumPlayer/1.1' } });
     if (!res.ok) {
       return { ok: false, error: `El servidor respondió HTTP ${res.status}.` };
     }
@@ -196,14 +322,7 @@ export async function downloadDirectAudioToLibrary(
       };
     }
 
-    // Evitamos descargar streams infinitos (radios sin Content-Length o mayores a 150 MB)
     const contentLength = Number(res.headers.get('content-length') || 0);
-    if (!contentLength) {
-      return {
-        ok: false,
-        error: 'Esta URL parece ser una radio en vivo continua (usa ▶ Escuchar en vez de Guardar).',
-      };
-    }
     if (contentLength > 150 * 1024 * 1024) {
       return { ok: false, error: 'El archivo excede el límite de seguridad de 150 MB.' };
     }
@@ -234,7 +353,7 @@ export async function downloadDirectAudioToLibrary(
     const buffer = Buffer.from(await res.arrayBuffer());
     await fs.promises.writeFile(destPath, buffer);
 
-    const track = await buildTrackFromFile(destPath);
+    const track = await buildTrackFromFile(destPath, true);
     return { ok: true, track };
   } catch (err) {
     return {
@@ -242,111 +361,4 @@ export async function downloadDirectAudioToLibrary(
       error: err instanceof Error ? err.message : 'No se pudo descargar el archivo de audio.',
     };
   }
-}
-
-function normalizeForMatch(text: string): string {
-  return text
-    .toLowerCase()
-    .normalize('NFD')
-    .replace(/[\u0300-\u036f]/g, '') // quitar tildes
-    .replace(/\s*[\(\[].*?[\)\]]\s*/g, ' ') // quitar (feat...), [remastered], etc.
-    .replace(/[^a-z0-9\s]/g, ' ')
-    .replace(/\s+/g, ' ')
-    .trim();
-}
-
-function extractSpotifyPlaylistId(input: string): string | null {
-  const trimmed = input.trim();
-  const urlMatch = trimmed.match(/spotify\.com\/playlist\/([a-zA-Z0-9]+)/);
-  if (urlMatch?.[1]) return urlMatch[1];
-  const uriMatch = trimmed.match(/spotify:playlist:([a-zA-Z0-9]+)/);
-  if (uriMatch?.[1]) return uriMatch[1];
-  if (/^[a-zA-Z0-9]{15,30}$/.test(trimmed)) return trimmed;
-  return null;
-}
-
-/**
- * Lee una playlist de Spotify por link o ID y la empareja con los MP3 locales del usuario.
- * Guarda automáticamente las coincidencias como una nueva playlist en Exum.
- */
-export async function matchSpotifyPlaylistToLocal(urlOrId: string): Promise<SpotifyMatchResult> {
-  const spState = getSpotifyState();
-  if (!spState.connected) {
-    return {
-      playlistName: '',
-      matchedTracks: [],
-      missingTracks: [],
-      error: 'Primero vincula tu cuenta de Spotify arriba con tu Client ID.',
-    };
-  }
-
-  const playlistId = extractSpotifyPlaylistId(urlOrId);
-  if (!playlistId) {
-    return {
-      playlistName: '',
-      matchedTracks: [],
-      missingTracks: [],
-      error: 'Link de playlist de Spotify inválido (ej: https://open.spotify.com/playlist/...).',
-    };
-  }
-
-  const details = await getSpotifyPlaylistDetails(playlistId);
-  if (!details) {
-    return {
-      playlistName: '',
-      matchedTracks: [],
-      missingTracks: [],
-      error: 'No se pudo leer esa playlist desde Spotify.',
-    };
-  }
-
-  const config = await loadConfig();
-  const localTracks = config.musicFolder ? await scanFolder(config.musicFolder) : [];
-
-  const indexedLocal = localTracks.map((t) => ({
-    track: t,
-    normTitle: normalizeForMatch(t.title),
-    normArtist: normalizeForMatch(t.artist),
-    normFile: normalizeForMatch(path.parse(t.fileName).name),
-  }));
-
-  const matchedTracks: Track[] = [];
-  const missingTracks: SpotifyTrackItem[] = [];
-  const usedLocalIds = new Set<string>();
-
-  for (const spTrack of details.tracks) {
-    const spTitle = normalizeForMatch(spTrack.title);
-    const spFirstArtist = normalizeForMatch(spTrack.artist.split(',')[0] || '');
-
-    const hit = indexedLocal.find((loc) => {
-      if (usedLocalIds.has(loc.track.id)) return false;
-      const titleMatch =
-        (spTitle.length >= 3 && (loc.normTitle.includes(spTitle) || spTitle.includes(loc.normTitle))) ||
-        (spTitle.length >= 4 && loc.normFile.includes(spTitle));
-      if (!titleMatch) return false;
-      if (!spFirstArtist || loc.normArtist === 'artista desconocido') return true;
-      return (
-        loc.normArtist.includes(spFirstArtist) ||
-        spFirstArtist.includes(loc.normArtist) ||
-        loc.normFile.includes(spFirstArtist)
-      );
-    });
-
-    if (hit) {
-      usedLocalIds.add(hit.track.id);
-      matchedTracks.push(hit.track);
-    } else {
-      missingTracks.push(spTrack);
-    }
-  }
-
-  if (matchedTracks.length > 0) {
-    await saveNamedPlaylist(`Spotify: ${details.name}`, matchedTracks);
-  }
-
-  return {
-    playlistName: details.name,
-    matchedTracks,
-    missingTracks,
-  };
 }

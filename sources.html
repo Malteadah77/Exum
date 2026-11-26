@@ -5,15 +5,15 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <meta
     http-equiv="Content-Security-Policy"
-    content="default-src 'self'; frame-src https://www.youtube-nocookie.com https://www.youtube.com; style-src 'self' 'unsafe-inline';"
+    content="default-src 'self'; img-src 'self' data: https: http:; style-src 'self' 'unsafe-inline';"
   />
-  <title>Exum — Fuentes Externas</title>
+  <title>Exum — Biblioteca y Explorador</title>
   <link rel="stylesheet" href="./styles/floating.css" />
 </head>
 <body>
   <div class="float-shell">
     <header class="float-titlebar">
-      <span class="float-title">EXUM — FUENTES EXTERNAS (NET)</span>
+      <span class="float-title">EXUM — BIBLIOTECA Y EXPLORADOR (LIB)</span>
       <div class="float-actions">
         <button id="btn-pin" class="float-btn" title="Mantener siempre visible">PIN</button>
         <button id="btn-min" class="float-btn" title="Minimizar">_</button>
@@ -23,16 +23,83 @@
 
     <main class="float-body">
       <div class="tabs-bar">
-        <button id="tab-radios" class="float-btn active">Radios</button>
+        <button id="tab-library" class="float-btn active">Mi Música</button>
+        <button id="tab-discover" class="float-btn">Explorar</button>
+        <button id="tab-radios" class="float-btn">Radios</button>
         <button id="tab-urls" class="float-btn">URL/.m3u</button>
-        <button id="tab-youtube" class="float-btn">YouTube</button>
-        <button id="tab-spotify" class="float-btn">Spotify</button>
       </div>
 
-      <!-- Pestaña 1: Buscador Mundial de Radios -->
-      <section id="panel-radios" class="tab-panel">
+      <!-- Pestaña 1: Biblioteca Local (Portadas ID3, Artistas, Álbumes, Favoritos) -->
+      <section id="panel-library" class="tab-panel">
         <div class="search-row">
-          <input id="radio-search-input" class="float-input" type="text" placeholder="Buscar radio o género (ej: lofi, synthwave, rock, japan)..." />
+          <input
+            id="lib-search-input"
+            class="float-input"
+            type="text"
+            placeholder="Buscar en tu música (título, artista o álbum)..."
+          />
+          <button id="btn-lib-folder" class="float-btn" title="Elegir o cambiar tu carpeta de música">Carpeta</button>
+          <button id="btn-lib-load-all" class="float-btn" title="Cargar las canciones filtradas en Exum">Cargar vista</button>
+        </div>
+
+        <div class="filter-row">
+          <button id="btn-lib-all" class="chip-btn active">Todo</button>
+          <button id="btn-lib-favs" class="chip-btn">Favoritos (0)</button>
+          <select id="lib-artist-filter" class="float-select" title="Filtrar por artista">
+            <option value="">Todos los artistas</option>
+          </select>
+          <select id="lib-album-filter" class="float-select" title="Filtrar por álbum">
+            <option value="">Todos los álbumes</option>
+          </select>
+        </div>
+
+        <div id="lib-status-banner" class="status-banner">Cargando biblioteca local...</div>
+        <div id="lib-tracks-list" class="source-list"></div>
+      </section>
+
+      <!-- Pestaña 2: Explorador Libre (Audius + Internet Archive CC) -->
+      <section id="panel-discover" class="tab-panel hidden">
+        <div class="sub-tabs">
+          <button id="sub-audius" class="float-btn active">Audius (Streaming libre)</button>
+          <button id="sub-archive" class="float-btn">Archive.org (Álbumes MP3)</button>
+        </div>
+
+        <div class="search-row">
+          <input
+            id="discover-search-input"
+            class="float-input"
+            type="text"
+            placeholder="Buscar música libre por género, artista o álbum..."
+          />
+          <button id="btn-discover-search" class="float-btn">Buscar</button>
+        </div>
+
+        <div class="chips-row">
+          <button class="chip-btn discover-tag-chip" data-tag="lofi">lofi</button>
+          <button class="chip-btn discover-tag-chip" data-tag="synthwave">synthwave</button>
+          <button class="chip-btn discover-tag-chip" data-tag="ambient">ambient</button>
+          <button class="chip-btn discover-tag-chip" data-tag="electronic">electronic</button>
+          <button class="chip-btn discover-tag-chip" data-tag="rock">rock</button>
+          <button class="chip-btn discover-tag-chip" data-tag="jazz">jazz</button>
+          <button class="chip-btn discover-tag-chip" data-tag="phonk">phonk</button>
+          <button class="chip-btn discover-tag-chip" data-tag="classical">classical</button>
+        </div>
+
+        <div id="discover-status-banner" class="status-banner hidden"></div>
+        <div id="discover-results-list" class="source-list">
+          <div class="lyrics-message">Explora música libre y gratuita directo en Exum (sin cuentas).</div>
+        </div>
+      </section>
+
+      <!-- Pestaña 3: Buscador Mundial de Radios (+30,000 emisoras) -->
+      <section id="panel-radios" class="tab-panel hidden">
+        <div class="search-row">
+          <input
+            id="radio-search-input"
+            class="float-input"
+            type="text"
+            placeholder="Buscar radio o género (ej: lofi, synthwave, rock, japan)..."
+          />
           <button id="btn-radio-search" class="float-btn">Buscar</button>
         </div>
         <div class="chips-row">
@@ -49,63 +116,29 @@
         </div>
       </section>
 
-      <!-- Pestaña 2: URLs directas, .m3u / .pls y guardar audio abierto -->
+      <!-- Pestaña 4: URLs directas, .m3u / .pls y descarga de audio abierto -->
       <section id="panel-urls" class="tab-panel hidden">
         <div class="form-stack">
           <input id="stream-name" class="float-input" type="text" placeholder="Nombre (opcional)..." />
-          <input id="stream-url" class="float-input" type="url" placeholder="https://... (audio directo .mp3/.wav o radio .m3u/.pls)" />
+          <input
+            id="stream-url"
+            class="float-input"
+            type="url"
+            placeholder="https://... (audio directo .mp3/.wav/.flac o radio .m3u/.pls)"
+          />
           <div class="search-row">
             <button id="btn-add-stream" class="float-btn">Escuchar y guardar</button>
-            <button id="btn-download-audio" class="float-btn" title="Descarga URL directa de audio abierto (.mp3/.wav/.flac) a tu carpeta de música">
+            <button
+              id="btn-download-audio"
+              class="float-btn"
+              title="Descarga una URL directa de audio abierto (.mp3/.wav/.flac) a tu carpeta local"
+            >
               Guardar MP3 local
             </button>
           </div>
         </div>
         <div id="url-status-banner" class="status-banner hidden"></div>
         <div id="streams-list" class="source-list"></div>
-      </section>
-
-      <!-- Pestaña 3: YouTube Oficial -->
-      <section id="panel-youtube" class="tab-panel hidden">
-        <div class="search-row">
-          <input id="yt-url-input" class="float-input" type="url" placeholder="Pega link de video o playlist de YouTube..." />
-          <button id="btn-yt-play" class="float-btn">Abrir</button>
-        </div>
-        <div id="yt-status-banner" class="status-banner hidden"></div>
-        <div id="yt-player-box" class="yt-player-box hidden">
-          <iframe
-            id="yt-iframe"
-            class="yt-iframe"
-            allow="autoplay; encrypted-media; picture-in-picture"
-            allowfullscreen
-          ></iframe>
-        </div>
-        <div class="section-bar">
-          <span class="section-title">TUS LINKS DE YOUTUBE GUARDADOS</span>
-          <button id="btn-yt-stop" class="float-btn">Detener YT</button>
-        </div>
-        <div id="yt-saved-list" class="source-list"></div>
-      </section>
-
-      <!-- Pestaña 4: Spotify Oficial -->
-      <section id="panel-spotify" class="tab-panel hidden">
-        <div class="hint-box">
-          App gratis en <strong>developer.spotify.com</strong> (Redirect URI:
-          <code>http://127.0.0.1:8888/callback</code>). Pega tu <strong>Client ID</strong> y vincula tu cuenta.
-        </div>
-        <div class="search-row">
-          <input id="spotify-client-id" class="float-input" type="text" placeholder="Tu Spotify Client ID..." />
-          <button id="btn-spotify-connect" class="float-btn">Vincular</button>
-          <button id="btn-spotify-disconnect" class="float-btn hidden">Salir</button>
-        </div>
-        <div class="search-row">
-          <input id="spotify-link-input" class="float-input" type="url" placeholder="Pega link open.spotify.com/playlist/... para emparejar con tus MP3" />
-          <button id="btn-spotify-match" class="float-btn">Emparejar</button>
-        </div>
-        <div id="spotify-status" class="status-banner">No vinculado</div>
-        <div id="spotify-list" class="source-list">
-          <div class="lyrics-message">Vincula tu cuenta de Spotify para ver o emparejar tus playlists.</div>
-        </div>
       </section>
     </main>
   </div>

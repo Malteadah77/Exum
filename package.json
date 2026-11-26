@@ -1,7 +1,7 @@
 {
   "name": "reproductor-de-musica",
-  "version": "1.0.0",
-  "description": "Exum — Reproductor de audio estilo Winamp moderno con skins .wsz, ecualizador de 10 bandas, letras sincronizadas y fuentes externas",
+  "version": "1.1.0",
+  "description": "Exum — Reproductor de audio estilo Winamp moderno con skins .wsz, ecualizador de 10 bandas, letras sincronizadas, biblioteca local y explorador libre",
   "main": "dist/main.js",
   "scripts": {
     "build:main": "tsc -p tsconfig.main.json",

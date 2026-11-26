@@ -305,12 +305,103 @@ body {
   text-overflow: ellipsis;
 }
 
-/* ---------- VENTANA DE FUENTES EXTERNAS (NET: STREAMS + SPOTIFY) ---------- */
+/* ---------- VENTANA DE BIBLIOTECA Y EXPLORADOR (LIB) ---------- */
 .tabs-bar {
   display: flex;
   gap: 6px;
   border-bottom: 1px solid rgba(255, 255, 255, 0.14);
   padding-bottom: 6px;
+  flex-wrap: wrap;
+}
+
+.sub-tabs {
+  display: flex;
+  gap: 6px;
+}
+
+.sub-tabs .float-btn {
+  flex: 1;
+  text-align: center;
+  padding: 4px 8px;
+}
+
+.filter-row {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.float-select {
+  flex: 1;
+  min-width: 110px;
+  background: var(--wsz-pl-bg);
+  color: var(--wsz-pl-current);
+  border: 1px solid rgba(255, 255, 255, 0.22);
+  border-radius: 3px;
+  padding: 3px 6px;
+  font-family: var(--wsz-pl-font);
+  font-size: 10px;
+  outline: none;
+  cursor: pointer;
+}
+
+.float-select:focus {
+  border-color: var(--wsz-pl-normal);
+}
+
+.track-thumb {
+  width: 36px;
+  height: 36px;
+  border-radius: 3px;
+  object-fit: cover;
+  flex-shrink: 0;
+  border: 1px solid rgba(255, 255, 255, 0.18);
+  background: rgba(0, 0, 0, 0.45);
+}
+
+.track-thumb-fallback {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.5px;
+  color: var(--wsz-pl-current);
+  background: linear-gradient(135deg, var(--wsz-pl-sel), rgba(0, 0, 0, 0.7));
+}
+
+.fav-btn.active {
+  background: var(--wsz-pl-sel);
+  color: var(--wsz-pl-current);
+  border-color: var(--wsz-pl-normal);
+  font-weight: 700;
+}
+
+.chip-btn.active {
+  background: var(--wsz-pl-sel);
+  color: var(--wsz-pl-current);
+  border-color: var(--wsz-pl-normal);
+}
+
+.lib-empty-box {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 10px;
+  padding: 28px 14px;
+  text-align: center;
+  font-size: 11px;
+  opacity: 0.85;
+}
+
+.album-header-bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 6px;
+  padding-bottom: 4px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.12);
 }
 
 .tab-panel {
@@ -441,25 +532,4 @@ body {
 
 .status-banner.hidden {
   display: none;
-}
-
-.yt-player-box {
-  width: 100%;
-  aspect-ratio: 16 / 9;
-  max-height: 190px;
-  border: 1px solid rgba(255, 255, 255, 0.2);
-  border-radius: 4px;
-  overflow: hidden;
-  background: #000;
-  flex-shrink: 0;
-}
-
-.yt-player-box.hidden {
-  display: none;
-}
-
-.yt-iframe {
-  width: 100%;
-  height: 100%;
-  border: none;
 }

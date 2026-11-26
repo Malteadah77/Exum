@@ -4,13 +4,13 @@ import { pathToFileURL } from 'url';
 import { Track } from '../shared/types';
 
 const AUDIO_EXTENSIONS = new Set(['.mp3', '.wav', '.flac', '.ogg', '.m4a', '.aac']);
+const MAX_COVER_BYTES = 512 * 1024; // 512 KB máx por carátula embebida para mantener baja la RAM
 
 type MusicMetadataModule = typeof import('music-metadata');
 let metadataModulePromise: Promise<MusicMetadataModule> | null = null;
 
 function getMusicMetadata(): Promise<MusicMetadataModule> {
   if (!metadataModulePromise) {
-    // Carga ESM dinámica segura desde un proceso Main en CommonJS
     metadataModulePromise = Function('return import("music-metadata")')() as Promise<MusicMetadataModule>;
   }
   return metadataModulePromise;
@@ -21,17 +21,28 @@ function isAudioFile(filePath: string): boolean {
 }
 
 /**
- * Lee los metadatos ID3 / tags de un archivo de audio.
- * Si un archivo no tiene etiquetas o falla el parser, usa el nombre del archivo como fallback.
+ * Lee metadatos ID3 (y opcionalmente carátula del álbum) de un archivo de audio local.
  */
-export async function buildTrackFromFile(filePath: string): Promise<Track> {
+export async function buildTrackFromFile(filePath: string, includeCover = false): Promise<Track> {
   const fileName = path.basename(filePath);
   const fallbackTitle = path.parse(filePath).name;
   const fallbackCodec = path.extname(filePath).slice(1).toUpperCase();
 
   try {
     const mm = await getMusicMetadata();
-    const metadata = await mm.parseFile(filePath, { duration: true, skipCovers: true });
+    const metadata = await mm.parseFile(filePath, {
+      duration: true,
+      skipCovers: !includeCover,
+    });
+
+    let coverDataUrl: string | undefined;
+    if (includeCover && metadata.common.picture && metadata.common.picture.length > 0) {
+      const pic = metadata.common.picture[0];
+      if (pic.data && pic.data.length <= MAX_COVER_BYTES) {
+        const mime = pic.format || 'image/jpeg';
+        coverDataUrl = `data:${mime};base64,${Buffer.from(pic.data).toString('base64')}`;
+      }
+    }
 
     return {
       id: filePath,
@@ -46,6 +57,8 @@ export async function buildTrackFromFile(filePath: string): Promise<Track> {
       sampleRate: metadata.format.sampleRate,
       channels: metadata.format.numberOfChannels,
       codec: metadata.format.container || fallbackCodec,
+      coverDataUrl,
+      sourceType: 'local',
     };
   } catch {
     return {
@@ -58,6 +71,7 @@ export async function buildTrackFromFile(filePath: string): Promise<Track> {
       album: '',
       duration: 0,
       codec: fallbackCodec,
+      sourceType: 'local',
     };
   }
 }
@@ -77,25 +91,29 @@ async function collectAudioFilesRecursively(dirPath: string): Promise<string[]> 
       }
     }
   } catch {
-    // Ignoramos carpetas sin permiso de lectura para no romper el escaneo
+    // Ignoramos carpetas sin permiso de lectura
   }
 
   return results;
 }
 
-async function parseTracksInBatches(filePaths: string[], batchSize = 20): Promise<Track[]> {
+async function parseTracksInBatches(
+  filePaths: string[],
+  includeCover: boolean,
+  batchSize = 20
+): Promise<Track[]> {
   const tracks: Track[] = [];
   for (let i = 0; i < filePaths.length; i += batchSize) {
     const chunk = filePaths.slice(i, i + batchSize);
-    const parsed = await Promise.all(chunk.map((fp) => buildTrackFromFile(fp)));
+    const parsed = await Promise.all(chunk.map((fp) => buildTrackFromFile(fp, includeCover)));
     tracks.push(...parsed);
   }
   return tracks;
 }
 
-export async function scanFolder(folderPath: string): Promise<Track[]> {
+export async function scanFolder(folderPath: string, includeCover = false): Promise<Track[]> {
   const filePaths = await collectAudioFilesRecursively(folderPath);
-  const tracks = await parseTracksInBatches(filePaths);
+  const tracks = await parseTracksInBatches(filePaths, includeCover);
   return tracks.sort((a, b) => a.title.localeCompare(b.title));
 }
 
@@ -112,11 +130,10 @@ export async function readTracksFromPaths(inputPaths: string[]): Promise<Track[]
         audioPaths.push(targetPath);
       }
     } catch {
-      // Si la ruta ya no existe o es inválida, la omitimos
+      // Omitir rutas inválidas
     }
   }
 
-  // Eliminamos duplicados por ruta
   const uniquePaths = Array.from(new Set(audioPaths));
-  return parseTracksInBatches(uniquePaths);
+  return parseTracksInBatches(uniquePaths, false);
 }

@@ -3,8 +3,10 @@ import * as path from 'path';
 import { loadConfig, saveConfig } from './main/configStore';
 import {
   downloadDirectAudioToLibrary,
-  matchSpotifyPlaylistToLocal,
+  getArchiveAlbumTracks,
   resolveStreamUrl,
+  searchArchiveAlbums,
+  searchAudiusTracks,
   searchWorldRadios,
 } from './main/externalSourcesService';
 import { readTracksFromPaths, scanFolder } from './main/libraryScanner';
@@ -16,13 +18,6 @@ import {
   listSavedPlaylists,
   saveNamedPlaylist,
 } from './main/playlistStore';
-import {
-  connectSpotify,
-  disconnectSpotify,
-  getSpotifyPlaylistTracks,
-  getSpotifyState,
-  listSpotifyPlaylists,
-} from './main/spotifyService';
 import {
   DEFAULT_PLEDIT,
   deleteSavedWszSkin,
@@ -207,10 +202,10 @@ function openFloatingWindow(type: FloatingWindowType): void {
       return;
     }
     sourcesWindow = new BrowserWindow({
-      width: 480,
-      height: 500,
-      minWidth: 340,
-      minHeight: 340,
+      width: 500,
+      height: 550,
+      minWidth: 380,
+      minHeight: 380,
       frame: false,
       icon: appIcon,
       backgroundColor: currentPalette.normalBg,
@@ -373,40 +368,26 @@ ipcMain.on('external:replacePlaylist', (_event, tracks: Track[], label?: string)
   }
 });
 
-ipcMain.on('external:pauseLocal', () => {
-  if (mainWindow && !mainWindow.isDestroyed()) {
-    mainWindow.webContents.send('external:pauseLocal');
-  }
-});
-
 ipcMain.handle('shell:openExternal', async (_event, url: string) => {
   if (typeof url === 'string' && (url.startsWith('https://') || url.startsWith('http://'))) {
     await shell.openExternal(url);
   }
 });
 
-// Fuentes Externas (Radio Browser, .m3u/.pls, descarga audio directo, Spotify Match)
+// Explorador Libre (Audius + Internet Archive) + Radios + .m3u/.pls + Descarga abierta
+ipcMain.handle('external:searchAudius', async (_event, query: string) => searchAudiusTracks(query));
+ipcMain.handle('external:searchArchive', async (_event, query: string) => searchArchiveAlbums(query));
+ipcMain.handle(
+  'external:archiveTracks',
+  async (_event, identifier: string, albumTitle: string, creator: string) =>
+    getArchiveAlbumTracks(identifier, albumTitle, creator)
+);
 ipcMain.handle('external:searchRadios', async (_event, query: string) => searchWorldRadios(query));
 ipcMain.handle('external:resolveStream', async (_event, url: string) => resolveStreamUrl(url));
 ipcMain.handle('external:downloadAudio', async (event, url: string, customName?: string) => {
   const owner = BrowserWindow.fromWebContents(event.sender) ?? mainWindow;
   return downloadDirectAudioToLibrary(url, customName, owner);
 });
-ipcMain.handle('spotify:matchPlaylist', async (_event, urlOrId: string) =>
-  matchSpotifyPlaylistToLocal(urlOrId)
-);
-
-// Spotify Oficial (OAuth 2.0 PKCE)
-ipcMain.handle('spotify:state', () => getSpotifyState());
-ipcMain.handle('spotify:connect', async (_event, clientId: string) => {
-  await saveConfig({ spotifyClientId: clientId.trim() || null });
-  return connectSpotify(clientId);
-});
-ipcMain.handle('spotify:disconnect', () => disconnectSpotify());
-ipcMain.handle('spotify:playlists', async () => listSpotifyPlaylists());
-ipcMain.handle('spotify:playlistTracks', async (_event, playlistId: string) =>
-  getSpotifyPlaylistTracks(playlistId)
-);
 
 // Gestión de Playlists guardadas + Importar/Exportar .m3u
 ipcMain.handle('playlists:list', async () => listSavedPlaylists());
@@ -450,7 +431,8 @@ ipcMain.handle('dialog:selectFolder', async () => {
   return { folderPath, tracks };
 });
 
-ipcMain.handle('library:scanFolder', async (_event, folderPath: string) => scanFolder(folderPath));
+ipcMain.handle('library:scanFolder', async (_event, folderPath: string) => scanFolder(folderPath, false));
+ipcMain.handle('library:scanWithCovers', async (_event, folderPath: string) => scanFolder(folderPath, true));
 ipcMain.handle('library:readPaths', async (_event, paths: string[]) => readTracksFromPaths(paths));
 
 // Letras (LRCLIB)

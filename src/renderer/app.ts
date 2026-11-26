@@ -654,10 +654,6 @@ window.electronAPI.onReplacePlaylistReceived((tracks: Track[], label?: string) =
   if (label) classicView?.showTempMarquee(label.toUpperCase());
 });
 
-window.electronAPI.onPauseLocalRequested(() => {
-  engine.pause();
-});
-
 // Arranque inicial
 async function bootstrap(): Promise<void> {
   const config = await window.electronAPI.loadConfig();

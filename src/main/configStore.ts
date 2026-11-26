@@ -5,7 +5,6 @@ import { AppConfig, SavedStream } from '../shared/types';
 
 const DEFAULT_EQ_GAINS = [0, 0, 0, 0, 0, 0, 0, 0, 0, 0];
 
-// Emisoras abiertas y legales de SomaFM para probar streams en vivo con 1 clic
 const DEFAULT_STREAMS: SavedStream[] = [
   {
     id: 'somafm-groovesalad',
@@ -38,8 +37,7 @@ const DEFAULT_CONFIG: AppConfig = {
   eqGains: [...DEFAULT_EQ_GAINS],
   visualizerMode: 'bars',
   savedStreams: [...DEFAULT_STREAMS],
-  savedYouTube: [],
-  spotifyClientId: null,
+  favoriteTrackIds: [],
 };
 
 function getConfigPath(): string {
@@ -59,8 +57,8 @@ export async function loadConfig(): Promise<AppConfig> {
     if (!Array.isArray(merged.savedStreams)) {
       merged.savedStreams = [...DEFAULT_STREAMS];
     }
-    if (!Array.isArray(merged.savedYouTube)) {
-      merged.savedYouTube = [];
+    if (!Array.isArray(merged.favoriteTrackIds)) {
+      merged.favoriteTrackIds = [];
     }
 
     return merged;
@@ -69,7 +67,7 @@ export async function loadConfig(): Promise<AppConfig> {
       ...DEFAULT_CONFIG,
       eqGains: [...DEFAULT_EQ_GAINS],
       savedStreams: [...DEFAULT_STREAMS],
-      savedYouTube: [],
+      favoriteTrackIds: [],
     };
   }
 }

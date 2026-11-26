@@ -4,7 +4,7 @@ export type RepeatMode = 'off' | 'all' | 'one';
 export type VisualizerMode = 'bars' | 'wave' | 'off';
 export type ShortcutAction = 'play-pause' | 'next' | 'previous' | 'stop';
 export type FloatingWindowType = 'lyrics' | 'skins' | 'sources';
-export type TrackSourceType = 'local' | 'stream' | 'spotify';
+export type TrackSourceType = 'local' | 'stream' | 'audius' | 'archive';
 export type PanelState = 'open' | 'shaded' | 'closed';
 
 export interface WszSkinMeta {
@@ -68,19 +68,24 @@ export interface RadioStationItem {
   codec: string;
 }
 
-export interface SavedYouTubeItem {
+export interface DiscoverTrackItem {
   id: string;
+  source: 'audius' | 'archive';
   title: string;
-  originalUrl: string;
-  embedUrl: string;
-  isPlaylist: boolean;
+  artist: string;
+  album: string;
+  duration: number;
+  genre: string;
+  streamUrl: string;
+  downloadUrl?: string;
+  artworkUrl?: string;
 }
 
-export interface SpotifyMatchResult {
-  playlistName: string;
-  matchedTracks: Track[];
-  missingTracks: SpotifyTrackItem[];
-  error?: string;
+export interface ArchiveAlbumItem {
+  identifier: string;
+  title: string;
+  creator: string;
+  artworkUrl: string;
 }
 
 export interface DirectDownloadResult {
@@ -94,30 +99,6 @@ export interface SavedPlaylist {
   name: string;
   tracks: Track[];
   updatedAt: number;
-}
-
-export interface SpotifyAuthState {
-  connected: boolean;
-  displayName?: string;
-  product?: string;
-  error?: string;
-}
-
-export interface SpotifyPlaylistItem {
-  id: string;
-  name: string;
-  trackCount: number;
-  externalUrl: string;
-}
-
-export interface SpotifyTrackItem {
-  id: string;
-  title: string;
-  artist: string;
-  album: string;
-  duration: number;
-  previewUrl: string | null;
-  externalUrl: string;
 }
 
 export interface LyricLine {
@@ -145,9 +126,9 @@ export interface Track {
   sampleRate?: number;
   channels?: number;
   codec?: string;
+  coverDataUrl?: string;
   sourceType?: TrackSourceType;
   isLive?: boolean;
-  externalUrl?: string;
 }
 
 export interface AppConfig {
@@ -161,8 +142,7 @@ export interface AppConfig {
   eqGains: number[];
   visualizerMode: VisualizerMode;
   savedStreams: SavedStream[];
-  savedYouTube: SavedYouTubeItem[];
-  spotifyClientId: string | null;
+  favoriteTrackIds: string[];
 }
 
 export interface ElectronAPI {
@@ -180,6 +160,7 @@ export interface ElectronAPI {
   openAudioFiles: () => Promise<Track[]>;
   selectMusicFolder: () => Promise<{ folderPath: string; tracks: Track[] } | null>;
   scanFolder: (folderPath: string) => Promise<Track[]>;
+  scanFolderWithCovers: (folderPath: string) => Promise<Track[]>;
   readDroppedPaths: (paths: string[]) => Promise<Track[]>;
   getPathForFile: (file: File) => string;
 
@@ -195,7 +176,6 @@ export interface ElectronAPI {
   requestSeekFromLyrics: (seconds: number) => void;
   sendExternalTrack: (track: Track, autoPlay: boolean) => void;
   replaceMainPlaylist: (tracks: Track[], label?: string) => void;
-  pauseLocalAudio: () => void;
   getSyncState: () => Promise<{ track: Track | null; palette: WszPleditColors; activeSkinId: string | null }>;
 
   // Eventos recibidos desde Main
@@ -207,7 +187,6 @@ export interface ElectronAPI {
   onSkinApplied: (callback: (skin: WszSkinData | null) => void) => void;
   onExternalTrackReceived: (callback: (track: Track, autoPlay: boolean) => void) => void;
   onReplacePlaylistReceived: (callback: (tracks: Track[], label?: string) => void) => void;
-  onPauseLocalRequested: (callback: () => void) => void;
 
   // Motor de Skins .wsz + Webamp Skin Museum
   listWszSkins: () => Promise<WszSkinMeta[]>;
@@ -219,13 +198,10 @@ export interface ElectronAPI {
   searchMuseumSkins: (query: string) => Promise<MuseumSkinItem[]>;
   downloadMuseumSkin: (downloadUrl: string, filename: string) => Promise<WszSkinData | null>;
 
-  // Spotify Oficial (OAuth 2.0 PKCE) + Fuentes Externas
-  spotifyGetState: () => Promise<SpotifyAuthState>;
-  spotifyConnect: (clientId: string) => Promise<SpotifyAuthState>;
-  spotifyDisconnect: () => Promise<SpotifyAuthState>;
-  spotifyListPlaylists: () => Promise<SpotifyPlaylistItem[]>;
-  spotifyGetPlaylistTracks: (playlistId: string) => Promise<SpotifyTrackItem[]>;
-  matchSpotifyPlaylist: (urlOrId: string) => Promise<SpotifyMatchResult>;
+  // Explorador Libre (Audius + Internet Archive) + Radios + URLs/.m3u
+  searchAudius: (query: string) => Promise<DiscoverTrackItem[]>;
+  searchArchiveAlbums: (query: string) => Promise<ArchiveAlbumItem[]>;
+  getArchiveAlbumTracks: (identifier: string, albumTitle: string, creator: string) => Promise<DiscoverTrackItem[]>;
   searchWorldRadios: (query: string) => Promise<RadioStationItem[]>;
   resolveStreamUrl: (url: string) => Promise<{ url: string; title?: string }>;
   downloadDirectAudio: (url: string, customName?: string) => Promise<DirectDownloadResult>;

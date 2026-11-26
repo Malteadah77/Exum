@@ -31,8 +31,8 @@
       <!-- 1. Main Deck (275x116) -->
       <div class="wsz-main-deck">
         <div class="wsz-titlebar">
-          <button id="wsz-main-menu-btn" class="wsz-menu-btn" title="Menú Exum (Skins, Letras, Fuentes)">☰</button>
-          <span class="wsz-fallback-brand">EXUM v1.0</span>
+          <button id="wsz-main-menu-btn" class="wsz-menu-btn" title="Menú Exum (Skins, Letras, Biblioteca)">☰</button>
+          <span class="wsz-fallback-brand">EXUM v1.1</span>
           <button id="wsz-win-min" class="wsz-win-btn" title="Minimizar">_</button>
           <button id="wsz-win-shade" class="wsz-win-btn" title="Modo mini-barra flotante">▬</button>
           <button id="wsz-win-close" class="wsz-win-btn" title="Cerrar">×</button>
@@ -42,7 +42,7 @@
         <div id="wsz-main-menu" class="wsz-popup-menu main-menu-pos hidden">
           <button class="wsz-menu-item" data-main-action="skins">Skins (.wsz)</button>
           <button class="wsz-menu-item" data-main-action="lyrics">Letras (LRC)</button>
-          <button class="wsz-menu-item" data-main-action="sources">Fuentes (NET)</button>
+          <button class="wsz-menu-item" data-main-action="sources">Biblioteca (LIB)</button>
           <div class="wsz-menu-sep"></div>
           <button class="wsz-menu-item" data-main-action="folder">Elegir carpeta</button>
           <button class="wsz-menu-item" data-main-action="files">Agregar archivos</button>
@@ -229,7 +229,7 @@
           <div id="pl-menu-add" class="wsz-popup-menu pl-menu-up hidden" style="left: 11px;">
             <button class="wsz-menu-item" data-pl-action="add-files">Agregar archivos</button>
             <button class="wsz-menu-item" data-pl-action="add-folder">Elegir carpeta</button>
-            <button class="wsz-menu-item" data-pl-action="add-url">Stream / Radio (NET)</button>
+            <button class="wsz-menu-item" data-pl-action="add-url">Explorar / Radio (LIB)</button>
           </div>
 
           <div id="pl-menu-rem" class="wsz-popup-menu pl-menu-up hidden" style="left: 40px;">
@@ -268,10 +268,10 @@
         </div>
       </div>
 
-      <!-- Tira fina de utilidades Exum (Buscador + NET / LRC / SKINS) -->
+      <!-- Tira fina de utilidades Exum (Buscador + LIB / LRC / SKINS) -->
       <div class="playlist-footer pl-full-only">
         <input id="search-input" class="pl-search" type="text" placeholder="Buscar canción o artista..." />
-        <button id="btn-sources" class="pl-btn" title="Radios / Streams URL y Spotify">NET</button>
+        <button id="btn-sources" class="pl-btn" title="Biblioteca local, Explorador libre y Radios">LIB</button>
         <button id="btn-lyrics" class="pl-btn" title="Abrir ventana flotante de Letras">LRC</button>
         <button id="btn-skins" class="pl-btn" title="Abrir gestor y museo de Skins .wsz">SKINS</button>
       </div>
