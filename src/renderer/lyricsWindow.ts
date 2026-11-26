@@ -38,10 +38,14 @@ window.electronAPI.onPaletteUpdated((palette: WszPleditColors) => applyPaletteTo
 window.electronAPI.onTrackChanged((track: Track | null) => handleTrack(track));
 window.electronAPI.onTimeUpdated((currentTime: number) => controller?.syncToTime(currentTime));
 
+// Bloquea navegación accidental al soltar archivos o enlaces en esta ventana flotante
+document.addEventListener('dragover', (e) => e.preventDefault());
+document.addEventListener('drop', (e) => e.preventDefault());
+
 async function init(): Promise<void> {
   const state = await window.electronAPI.getSyncState();
   applyPaletteToDocument(state.palette);
   handleTrack(state.track);
 }
 
-void init();
+void init().catch(() => undefined);

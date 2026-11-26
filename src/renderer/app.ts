@@ -8,7 +8,7 @@ import type {
 import { AudioEngine, formatTime } from './audioEngine.js';
 import { PlaylistManager } from './playlistManager.js';
 import { AudioVisualizer } from './visualizer.js';
-import { DEFAULT_PALETTE, WszClassicView } from './wszRenderer.js';
+import { WszClassicView } from './wszRenderer.js';
 
 declare global {
   interface Window {
@@ -55,6 +55,7 @@ const plSavedItemsEl = document.getElementById('pl-saved-items');
 let isMiniMode = false;
 let searchQuery = '';
 let draggingRowIndex: number | null = null;
+let volumeSaveTimer: ReturnType<typeof setTimeout> | null = null;
 
 const visualizer = visCanvas ? new AudioVisualizer(visCanvas, 18) : null;
 
@@ -126,6 +127,7 @@ function updatePlaylistTimeDisplay(): void {
 async function toggleMiniMode(): Promise<void> {
   isMiniMode = await window.electronAPI.setMiniMode(!isMiniMode);
   document.body.classList.toggle('mini-mode', isMiniMode);
+  visualizer?.setVisible(!isMiniMode && !document.hidden);
   if (!isMiniMode) {
     classicView?.fitToWindowWidth();
   }
@@ -315,11 +317,9 @@ function applySkinOrDefault(skin: WszSkinData | null): void {
   if (skin) {
     classicView?.applySkin(skin);
     visualizer?.setCustomPalette(skin.visColors);
-    window.electronAPI.broadcastPalette(skin.pledit);
   } else {
     classicView?.clearSkin();
     visualizer?.setCustomPalette(null);
-    window.electronAPI.broadcastPalette(DEFAULT_PALETTE);
   }
 }
 
@@ -327,7 +327,7 @@ function applySkinOrDefault(skin: WszSkinData | null): void {
 const engine = new AudioEngine({
   onAudioGraphReady: (analyser) => visualizer?.attachAnalyser(analyser),
 
-  onTrackLoaded: (_title, duration) => {
+  onTrackLoaded: (duration) => {
     classicView?.updateTime(0, duration);
     updatePlaylistTimeDisplay();
   },
@@ -340,7 +340,12 @@ const engine = new AudioEngine({
 
   onStateChange: (state) => {
     classicView?.updatePlaybackState(state);
-    if (miniPlay) miniPlay.textContent = state === 'playing' ? '⏸' : '▶';
+    visualizer?.setPlaying(state === 'playing');
+    if (miniPlay) miniPlay.textContent = state === 'playing' ? '||' : '>';
+  },
+
+  onCorsFallback: () => {
+    classicView?.showTempMarquee('STREAM SIN EQ (CORS)');
   },
 
   onEnded: () => playlist.handleTrackEnded(),
@@ -358,7 +363,7 @@ const playlist = new PlaylistManager({
   onTrackSelect: (track) => {
     classicView?.updateTrackInfo(track);
     if (miniTitle) miniTitle.textContent = `${track.title} — ${track.artist}`;
-    engine.load(track.fileUrl, track.title);
+    engine.load(track.fileUrl);
     void engine.play();
     window.electronAPI.broadcastTrack(track);
     updatePlaylistTimeDisplay();
@@ -390,14 +395,18 @@ const classicView = winampDecks
       onSeek: (sec) => engine.seek(sec),
       onVolume: (pct) => {
         engine.setVolume(pct / 100);
-        void window.electronAPI.saveConfig({ volume: pct });
+        if (volumeSaveTimer) clearTimeout(volumeSaveTimer);
+        volumeSaveTimer = setTimeout(() => {
+          volumeSaveTimer = null;
+          void window.electronAPI.saveConfig({ volume: pct });
+        }, 250);
       },
       onBalance: (pan) => engine.setBalance(pan),
       onPreampChange: (db) => engine.setPreampGain(db),
       onEqBandChange: (idx, db, commit) => {
         engine.setBandGain(idx, db);
         if (commit) {
-          void window.electronAPI.saveConfig({ eqPreset: 'custom', eqGains: engine.getEqGains() });
+          void window.electronAPI.saveConfig({ eqGains: engine.getEqGains() });
         }
       },
       onEqToggle: () => {
@@ -410,12 +419,12 @@ const classicView = winampDecks
         const flat = [0, 0, 0, 0, 0, 0, 0, 0, 0, 0];
         engine.setAllBandGains(flat);
         classicView?.updateEq(engine.isEqEnabled, flat);
-        void window.electronAPI.saveConfig({ eqPreset: 'flat', eqGains: flat });
+        void window.electronAPI.saveConfig({ eqGains: flat });
       },
-      onEqPresetSelect: (presetId, gains) => {
+      onEqPresetSelect: (_presetId, gains) => {
         engine.setAllBandGains(gains);
         classicView?.updateEq(engine.isEqEnabled, gains);
-        void window.electronAPI.saveConfig({ eqPreset: presetId, eqGains: gains });
+        void window.electronAPI.saveConfig({ eqGains: gains });
       },
       onPanelsVisibilityChange: (eqState, plState) => {
         void window.electronAPI.setWindowPanels(eqState, plState);
@@ -506,8 +515,9 @@ document.querySelectorAll<HTMLElement>('[data-pl-action]').forEach((btn) => {
       const removed = playlist.removeDuplicates();
       classicView?.showTempMarquee(`DUPLICADOS QUITADOS: ${removed}`);
     } else if (action === 'rem-all' || action === 'list-new') {
-      engine.stop();
+      engine.unload();
       playlist.clear();
+      window.electronAPI.broadcastTrack(null);
     } else if (action === 'sel-all') playlist.selectAll();
     else if (action === 'sel-none') playlist.selectNone();
     else if (action === 'sel-inv') playlist.invertSelection();
@@ -611,6 +621,11 @@ playerShell?.addEventListener('drop', async (event) => {
   }
 });
 
+// Pausar visualizador si la ventana queda oculta o minimizada
+document.addEventListener('visibilitychange', () => {
+  visualizer?.setVisible(!isMiniMode && !document.hidden);
+});
+
 // Atajos locales (incluye Supr/Delete para quitar filas seleccionadas)
 window.addEventListener('keydown', (event) => {
   const tag = (document.activeElement as HTMLElement | null)?.tagName;
@@ -621,12 +636,15 @@ window.addEventListener('keydown', (event) => {
     return;
   }
 
-  if (!engine.hasTrack) return;
-
   if (event.code === 'Space') {
     event.preventDefault();
-    engine.togglePlay();
-  } else if (event.code === 'ArrowRight') {
+    triggerPlayOrStartFirst();
+    return;
+  }
+
+  if (!engine.hasTrack) return;
+
+  if (event.code === 'ArrowRight') {
     event.preventDefault();
     engine.seek(engine.currentTime + 5);
   } else if (event.code === 'ArrowLeft') {
@@ -679,4 +697,4 @@ async function bootstrap(): Promise<void> {
   }
 }
 
-void bootstrap();
+void bootstrap().catch(() => undefined);

@@ -101,6 +101,7 @@ export class WszClassicView {
   private duration = 0;
   private lastCurrentSec = 0;
   private showRemainingTime = false;
+  private isSeeking = false;
 
   private eqState: PanelState = 'open';
   private plState: PanelState = 'open';
@@ -460,7 +461,7 @@ export class WszClassicView {
     });
     document.getElementById('wsz-clutter-i')?.addEventListener('click', () => {
       if (!this.currentTrack) {
-        this.showTempMarquee('EXUM v0.6.5 — NO TRACK');
+        this.showTempMarquee('EXUM v1.1 — NO TRACK');
         return;
       }
       const kbps = this.currentTrack.bitrate ? `${this.currentTrack.bitrate}kbps` : 'LIVE';
@@ -572,16 +573,27 @@ export class WszClassicView {
     document.getElementById('wsz-win-shade')?.addEventListener('click', () => this.callbacks.onMiniMode());
     document.getElementById('wsz-win-close')?.addEventListener('click', () => this.callbacks.onClose());
 
+    this.posSlider?.addEventListener('pointerdown', () => {
+      this.isSeeking = true;
+    });
+
     this.posSlider?.addEventListener('input', () => {
       if (!this.posSlider) return;
+      this.isSeeking = true;
       const sec = Number(this.posSlider.value);
       this.updatePosThumb(sec, this.duration);
       this.showTempMarquee(`SEEK TO: ${formatTime(sec)} / ${formatTime(this.duration)}`);
     });
 
-    this.posSlider?.addEventListener('change', () => {
+    const commitSeek = (): void => {
       if (!this.posSlider) return;
+      this.isSeeking = false;
       this.callbacks.onSeek(Number(this.posSlider.value));
+    };
+
+    this.posSlider?.addEventListener('change', commitSeek);
+    this.posSlider?.addEventListener('pointerup', () => {
+      this.isSeeking = false;
     });
 
     this.volSlider?.addEventListener('input', () => {
@@ -704,10 +716,10 @@ export class WszClassicView {
     this.playpausEl.classList.remove('state-playing', 'state-paused', 'state-stopped');
     if (state === 'playing') {
       this.playpausEl.classList.add('state-playing');
-      this.playpausEl.textContent = '▶';
+      this.playpausEl.textContent = '>';
     } else if (state === 'paused') {
       this.playpausEl.classList.add('state-paused');
-      this.playpausEl.textContent = '⏸';
+      this.playpausEl.textContent = '||';
     } else {
       this.playpausEl.classList.add('state-stopped');
       this.playpausEl.textContent = '■';
@@ -715,11 +727,12 @@ export class WszClassicView {
   }
 
   public updateTime(currentSec: number, durationSec: number): void {
+    const finiteDuration = Number.isFinite(durationSec) && durationSec > 0 ? durationSec : 0;
     this.lastCurrentSec = currentSec;
-    this.duration = durationSec;
+    this.duration = finiteDuration;
 
-    const useRemaining = this.showRemainingTime && Number.isFinite(durationSec) && durationSec > 0;
-    const displaySec = useRemaining ? Math.max(0, durationSec - currentSec) : currentSec;
+    const useRemaining = this.showRemainingTime && finiteDuration > 0;
+    const displaySec = useRemaining ? Math.max(0, finiteDuration - currentSec) : currentSec;
     this.minusEl?.classList.toggle('hidden', !useRemaining);
 
     const safeSec = Number.isFinite(displaySec) && displaySec >= 0 ? Math.floor(displaySec) : 0;
@@ -739,11 +752,13 @@ export class WszClassicView {
       }
     });
 
-    if (this.posSlider) {
-      this.posSlider.max = String(durationSec || 0);
-      this.posSlider.value = String(currentSec || 0);
+    if (!this.isSeeking) {
+      if (this.posSlider) {
+        this.posSlider.max = String(finiteDuration);
+        this.posSlider.value = String(Number.isFinite(currentSec) ? currentSec : 0);
+      }
+      this.updatePosThumb(currentSec, finiteDuration);
     }
-    this.updatePosThumb(currentSec, durationSec);
   }
 
   private updatePosThumb(current: number, duration: number): void {

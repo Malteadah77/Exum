@@ -1,5 +1,6 @@
-import { app, BrowserWindow, dialog, globalShortcut, ipcMain, Rectangle, shell } from 'electron';
+import { app, BrowserWindow, dialog, globalShortcut, ipcMain, Rectangle, session } from 'electron';
 import * as path from 'path';
+import { pathToFileURL } from 'url';
 import { loadConfig, saveConfig } from './main/configStore';
 import {
   downloadDirectAudioToLibrary,
@@ -27,7 +28,7 @@ import {
   loadSavedWszSkin,
   searchMuseumSkins,
 } from './main/wszService';
-import {
+import type {
   AppConfig,
   FloatingWindowType,
   PanelState,
@@ -37,10 +38,19 @@ import {
   WszSkinData,
 } from './shared/types';
 
+// Identidad de aplicación en Windows (anclado en barra de tareas y agrupación)
+if (process.platform === 'win32') {
+  app.setAppUserModelId('com.exum.player');
+}
+
+// Bloqueo de instancia única antes de registrar IPCs
+const gotSingleInstanceLock = app.requestSingleInstanceLock();
+if (!gotSingleInstanceLock) {
+  app.quit();
+}
+
 let mainWindow: BrowserWindow | null = null;
-let lyricsWindow: BrowserWindow | null = null;
-let skinsWindow: BrowserWindow | null = null;
-let sourcesWindow: BrowserWindow | null = null;
+const floatingWindows = new Map<FloatingWindowType, BrowserWindow>();
 
 const BASE_W = 275;
 const BASE_H_MAIN = 116;
@@ -52,11 +62,46 @@ const MAX_SCALE = 2.5;
 
 let normalBounds: Rectangle | null = null;
 let isMiniMode = false;
+let wasPinnedBeforeMini = false;
 let eqPanelState: PanelState = 'open';
 let plPanelState: PanelState = 'open';
-// Única fuente de verdad de la escala actual: evita encogimiento progresivo al alternar EQ/PL
 let currentScale = 1.5;
 let isProgrammaticResize = false;
+let programmaticResizeTimer: ReturnType<typeof setTimeout> | null = null;
+
+// Estado sincronizado en memoria para ventanas flotantes recién abiertas
+let currentTrack: Track | null = null;
+let currentPalette: WszPleditColors = { ...DEFAULT_PLEDIT };
+let activeSkinId: string | null = null;
+
+const ALLOWED_LOCAL_PAGES = new Set([
+  pathToFileURL(path.join(__dirname, '../index.html')).href,
+  pathToFileURL(path.join(__dirname, '../lyrics.html')).href,
+  pathToFileURL(path.join(__dirname, '../skins.html')).href,
+  pathToFileURL(path.join(__dirname, '../sources.html')).href,
+]);
+
+const FLOATING_SPECS: Record<
+  FloatingWindowType,
+  { file: string; width: number; height: number; minWidth: number; minHeight: number }
+> = {
+  lyrics: { file: '../lyrics.html', width: 360, height: 440, minWidth: 260, minHeight: 240 },
+  skins: { file: '../skins.html', width: 520, height: 540, minWidth: 360, minHeight: 360 },
+  sources: { file: '../sources.html', width: 500, height: 550, minWidth: 380, minHeight: 380 },
+};
+
+function getAppIconPath(): string {
+  return path.join(__dirname, '../assets/icon.ico');
+}
+
+function getSafeWebPreferences(): Electron.WebPreferences {
+  return {
+    preload: path.join(__dirname, 'preload.js'),
+    contextIsolation: true,
+    nodeIntegration: false,
+    sandbox: true,
+  };
+}
 
 function computeBaseHeight(eqState: PanelState, plState: PanelState): number {
   const eqH = eqState === 'open' ? BASE_H_EQ : eqState === 'shaded' ? BASE_H_SHADED : 0;
@@ -75,10 +120,18 @@ function applyWindowProportions(eqState: PanelState, plState: PanelState, resize
   const maxW = Math.round(BASE_W * MAX_SCALE);
   const maxH = Math.round(baseH * MAX_SCALE);
 
+  if (programmaticResizeTimer) {
+    clearTimeout(programmaticResizeTimer);
+    programmaticResizeTimer = null;
+  }
+
   isProgrammaticResize = true;
   mainWindow.setAspectRatio(0);
   mainWindow.setMinimumSize(minW, Math.min(minH, BASE_H_MAIN));
-  mainWindow.setMaximumSize(maxW, Math.max(maxH, Math.round((BASE_H_MAIN + BASE_H_EQ + BASE_H_PL) * MAX_SCALE)));
+  mainWindow.setMaximumSize(
+    maxW,
+    Math.max(maxH, Math.round((BASE_H_MAIN + BASE_H_EQ + BASE_H_PL) * MAX_SCALE))
+  );
 
   if (resizeWindow) {
     const targetW = Math.round(BASE_W * currentScale);
@@ -90,19 +143,14 @@ function applyWindowProportions(eqState: PanelState, plState: PanelState, resize
   mainWindow.setMaximumSize(maxW, maxH);
   mainWindow.setAspectRatio(BASE_W / baseH);
 
-  setTimeout(() => {
+  programmaticResizeTimer = setTimeout(() => {
     isProgrammaticResize = false;
+    programmaticResizeTimer = null;
   }, 120);
 }
 
-// Estado sincronizado en memoria para ventanas flotantes recién abiertas
-let currentTrack: Track | null = null;
-let currentPalette: WszPleditColors = { ...DEFAULT_PLEDIT };
-let activeSkinId: string | null = null;
-
 function createWindow(): void {
   const initialBaseH = computeBaseHeight('open', 'open');
-  const appIcon = path.join(__dirname, '../assets/icon.png');
   mainWindow = new BrowserWindow({
     width: Math.round(BASE_W * currentScale),
     height: Math.round(initialBaseH * currentScale),
@@ -112,125 +160,64 @@ function createWindow(): void {
     maxHeight: Math.round(initialBaseH * MAX_SCALE),
     frame: false,
     useContentSize: true,
-    icon: appIcon,
+    icon: getAppIconPath(),
     backgroundColor: '#0e090b',
-    webPreferences: {
-      preload: path.join(__dirname, 'preload.js'),
-      contextIsolation: true,
-      nodeIntegration: false,
-    },
+    webPreferences: getSafeWebPreferences(),
   });
 
   mainWindow.setAspectRatio(BASE_W / initialBaseH);
-  mainWindow.loadFile(path.join(__dirname, '../index.html'));
+  void mainWindow.loadFile(path.join(__dirname, '../index.html')).catch(() => undefined);
 
-  // Solo actualizamos currentScale cuando el usuario redimensiona manualmente la ventana
   mainWindow.on('resize', () => {
-    if (!mainWindow || isProgrammaticResize || isMiniMode) return;
+    if (!mainWindow || mainWindow.isDestroyed() || isProgrammaticResize || isMiniMode) return;
     const [w] = mainWindow.getContentSize();
     if (w >= BASE_W * MIN_SCALE && w <= BASE_W * MAX_SCALE + 2) {
       currentScale = Math.max(MIN_SCALE, Math.min(MAX_SCALE, w / BASE_W));
     }
   });
 
-  // Al cerrar la ventana principal, cerramos también las flotantes
   mainWindow.on('closed', () => {
-    lyricsWindow?.close();
-    skinsWindow?.close();
-    sourcesWindow?.close();
+    for (const win of floatingWindows.values()) {
+      if (!win.isDestroyed()) win.close();
+    }
+    floatingWindows.clear();
     mainWindow = null;
   });
 }
 
 function openFloatingWindow(type: FloatingWindowType): void {
-  const appIcon = path.join(__dirname, '../assets/icon.png');
-  if (type === 'lyrics') {
-    if (lyricsWindow && !lyricsWindow.isDestroyed()) {
-      lyricsWindow.focus();
-      return;
-    }
-    lyricsWindow = new BrowserWindow({
-      width: 360,
-      height: 440,
-      minWidth: 260,
-      minHeight: 240,
-      frame: false,
-      icon: appIcon,
-      backgroundColor: currentPalette.normalBg,
-      webPreferences: {
-        preload: path.join(__dirname, 'preload.js'),
-        contextIsolation: true,
-        nodeIntegration: false,
-      },
-    });
-    lyricsWindow.loadFile(path.join(__dirname, '../lyrics.html'));
-    lyricsWindow.on('closed', () => {
-      lyricsWindow = null;
-    });
+  const existing = floatingWindows.get(type);
+  if (existing && !existing.isDestroyed()) {
+    existing.focus();
     return;
   }
 
-  if (type === 'skins') {
-    if (skinsWindow && !skinsWindow.isDestroyed()) {
-      skinsWindow.focus();
-      return;
-    }
-    skinsWindow = new BrowserWindow({
-      width: 520,
-      height: 540,
-      minWidth: 360,
-      minHeight: 360,
-      frame: false,
-      icon: appIcon,
-      backgroundColor: currentPalette.normalBg,
-      webPreferences: {
-        preload: path.join(__dirname, 'preload.js'),
-        contextIsolation: true,
-        nodeIntegration: false,
-      },
-    });
-    skinsWindow.loadFile(path.join(__dirname, '../skins.html'));
-    skinsWindow.on('closed', () => {
-      skinsWindow = null;
-    });
-    return;
-  }
+  const spec = FLOATING_SPECS[type];
+  if (!spec) return;
 
-  if (type === 'sources') {
-    if (sourcesWindow && !sourcesWindow.isDestroyed()) {
-      sourcesWindow.focus();
-      return;
-    }
-    sourcesWindow = new BrowserWindow({
-      width: 500,
-      height: 550,
-      minWidth: 380,
-      minHeight: 380,
-      frame: false,
-      icon: appIcon,
-      backgroundColor: currentPalette.normalBg,
-      webPreferences: {
-        preload: path.join(__dirname, 'preload.js'),
-        contextIsolation: true,
-        nodeIntegration: false,
-      },
-    });
-    sourcesWindow.loadFile(path.join(__dirname, '../sources.html'));
-    sourcesWindow.on('closed', () => {
-      sourcesWindow = null;
-    });
-  }
+  const win = new BrowserWindow({
+    width: spec.width,
+    height: spec.height,
+    minWidth: spec.minWidth,
+    minHeight: spec.minHeight,
+    frame: false,
+    icon: getAppIconPath(),
+    backgroundColor: currentPalette.normalBg,
+    webPreferences: getSafeWebPreferences(),
+  });
+
+  floatingWindows.set(type, win);
+  void win.loadFile(path.join(__dirname, spec.file)).catch(() => undefined);
+  win.on('closed', () => {
+    floatingWindows.delete(type);
+  });
 }
 
 function broadcastToFloating(channel: string, payload: unknown): void {
-  if (lyricsWindow && !lyricsWindow.isDestroyed()) {
-    lyricsWindow.webContents.send(channel, payload);
-  }
-  if (skinsWindow && !skinsWindow.isDestroyed()) {
-    skinsWindow.webContents.send(channel, payload);
-  }
-  if (sourcesWindow && !sourcesWindow.isDestroyed()) {
-    sourcesWindow.webContents.send(channel, payload);
+  for (const win of floatingWindows.values()) {
+    if (!win.isDestroyed()) {
+      win.webContents.send(channel, payload);
+    }
   }
 }
 
@@ -242,8 +229,14 @@ function broadcastSkinToAll(skin: WszSkinData | null): void {
     mainWindow.webContents.send('wsz:skinApplied', skin);
   }
   broadcastToFloating('sync:palette', currentPalette);
-  if (skinsWindow && !skinsWindow.isDestroyed()) {
-    skinsWindow.webContents.send('wsz:skinApplied', skin);
+
+  const skinsWin = floatingWindows.get('skins');
+  if (skinsWin && !skinsWin.isDestroyed()) {
+    // Enviamos solo metadatos mínimos a la ventana de skins (no sprites base64)
+    const liteSkin = skin
+      ? { meta: skin.meta, sprites: {}, pledit: skin.pledit, visColors: [] }
+      : null;
+    skinsWin.webContents.send('wsz:skinApplied', liteSkin);
   }
 }
 
@@ -272,18 +265,33 @@ function registerGlobalShortcuts(): void {
   }
 }
 
-// Control de ventana genérico (funciona para principal, Letras y Skins)
+// Blindaje global de navegación y ventanas emergentes (bloquea secuestro de preload)
+app.on('web-contents-created', (_event, contents) => {
+  contents.on('will-navigate', (navEvent, navigationUrl) => {
+    if (!ALLOWED_LOCAL_PAGES.has(navigationUrl)) {
+      navEvent.preventDefault();
+    }
+  });
+  contents.setWindowOpenHandler(() => ({ action: 'deny' }));
+  contents.on('will-attach-webview', (attachEvent) => {
+    attachEvent.preventDefault();
+  });
+});
+
+// Control de ventana genérico (principal, Letras, Skins y Biblioteca)
 ipcMain.on('window:minimize', (event) => {
-  BrowserWindow.fromWebContents(event.sender)?.minimize();
+  const win = BrowserWindow.fromWebContents(event.sender);
+  if (win && !win.isDestroyed()) win.minimize();
 });
 
 ipcMain.on('window:close', (event) => {
-  BrowserWindow.fromWebContents(event.sender)?.close();
+  const win = BrowserWindow.fromWebContents(event.sender);
+  if (win && !win.isDestroyed()) win.close();
 });
 
 ipcMain.handle('window:togglePin', (event) => {
   const win = BrowserWindow.fromWebContents(event.sender);
-  if (!win) return false;
+  if (!win || win.isDestroyed()) return false;
   const next = !win.isAlwaysOnTop();
   win.setAlwaysOnTop(next, 'floating');
   return next;
@@ -303,22 +311,26 @@ ipcMain.handle('window:openFloating', (_event, type: FloatingWindowType) => {
 
 // Modo Mini-Barra Flotante para la ventana principal
 ipcMain.handle('window:setMiniMode', (_event, enabled: boolean) => {
-  if (!mainWindow) return false;
+  if (!mainWindow || mainWindow.isDestroyed()) return false;
   if (enabled === isMiniMode) return isMiniMode;
 
   isMiniMode = enabled;
   if (enabled) {
-    normalBounds = mainWindow.getBounds();
+    wasPinnedBeforeMini = mainWindow.isAlwaysOnTop();
+    if (!mainWindow.isMinimized()) {
+      normalBounds = mainWindow.getBounds();
+    }
     mainWindow.setAspectRatio(0);
     mainWindow.setMinimumSize(275, 56);
     mainWindow.setMaximumSize(688, 90);
     mainWindow.setSize(412, 62);
     mainWindow.setAlwaysOnTop(true, 'floating');
   } else {
-    mainWindow.setAlwaysOnTop(false);
-    if (normalBounds) {
-      mainWindow.setMinimumSize(275, 200);
-      mainWindow.setMaximumSize(688, 1000);
+    mainWindow.setAlwaysOnTop(wasPinnedBeforeMini, 'floating');
+    const baseH = computeBaseHeight(eqPanelState, plPanelState);
+    mainWindow.setMinimumSize(Math.round(BASE_W * MIN_SCALE), Math.round(baseH * MIN_SCALE));
+    mainWindow.setMaximumSize(Math.round(BASE_W * MAX_SCALE), Math.round(baseH * MAX_SCALE));
+    if (normalBounds && normalBounds.x > -10_000 && normalBounds.y > -10_000) {
       mainWindow.setBounds(normalBounds);
     }
     applyWindowProportions(eqPanelState, plPanelState, false);
@@ -326,7 +338,6 @@ ipcMain.handle('window:setMiniMode', (_event, enabled: boolean) => {
   return isMiniMode;
 });
 
-// Ajusta altura y proporción bloqueada según estado de EQ y PL (open / shaded / closed)
 ipcMain.handle('window:setPanels', (_event, eqState: PanelState, plState: PanelState) => {
   applyWindowProportions(eqState, plState, true);
 });
@@ -334,43 +345,34 @@ ipcMain.handle('window:setPanels', (_event, eqState: PanelState, plState: PanelS
 // Sincronización entre ventana principal y ventanas flotantes
 ipcMain.on('sync:track', (_event, track: Track | null) => {
   currentTrack = track;
-  if (lyricsWindow && !lyricsWindow.isDestroyed()) {
-    lyricsWindow.webContents.send('sync:track', track);
+  const lyricsWin = floatingWindows.get('lyrics');
+  if (lyricsWin && !lyricsWin.isDestroyed()) {
+    lyricsWin.webContents.send('sync:track', track);
   }
 });
 
 ipcMain.on('sync:time', (_event, currentTime: number) => {
-  if (lyricsWindow && !lyricsWindow.isDestroyed()) {
-    lyricsWindow.webContents.send('sync:time', currentTime);
+  const lyricsWin = floatingWindows.get('lyrics');
+  if (lyricsWin && !lyricsWin.isDestroyed()) {
+    lyricsWin.webContents.send('sync:time', currentTime);
   }
 });
 
-ipcMain.on('sync:palette', (_event, palette: WszPleditColors) => {
-  currentPalette = { ...palette };
-  broadcastToFloating('sync:palette', currentPalette);
-});
-
 ipcMain.on('lyrics:seek', (_event, seconds: number) => {
-  if (mainWindow && !mainWindow.isDestroyed()) {
+  if (mainWindow && !mainWindow.isDestroyed() && Number.isFinite(seconds) && seconds >= 0) {
     mainWindow.webContents.send('lyrics:seek', seconds);
   }
 });
 
 ipcMain.on('external:addTrack', (_event, track: Track, autoPlay: boolean) => {
   if (mainWindow && !mainWindow.isDestroyed()) {
-    mainWindow.webContents.send('external:trackReceived', track, autoPlay);
+    mainWindow.webContents.send('external:trackReceived', track, Boolean(autoPlay));
   }
 });
 
 ipcMain.on('external:replacePlaylist', (_event, tracks: Track[], label?: string) => {
-  if (mainWindow && !mainWindow.isDestroyed()) {
+  if (mainWindow && !mainWindow.isDestroyed() && Array.isArray(tracks)) {
     mainWindow.webContents.send('external:replacePlaylist', tracks, label);
-  }
-});
-
-ipcMain.handle('shell:openExternal', async (_event, url: string) => {
-  if (typeof url === 'string' && (url.startsWith('https://') || url.startsWith('http://'))) {
-    await shell.openExternal(url);
   }
 });
 
@@ -408,7 +410,7 @@ ipcMain.handle('sync:getState', () => ({
 
 // Archivos y biblioteca local
 ipcMain.handle('dialog:openAudio', async () => {
-  if (!mainWindow) return [];
+  if (!mainWindow || mainWindow.isDestroyed()) return [];
   const result = await dialog.showOpenDialog(mainWindow, {
     title: 'Agregar canciones a la playlist',
     properties: ['openFile', 'multiSelections'],
@@ -418,22 +420,35 @@ ipcMain.handle('dialog:openAudio', async () => {
   return readTracksFromPaths(result.filePaths);
 });
 
-ipcMain.handle('dialog:selectFolder', async () => {
-  if (!mainWindow) return null;
-  const result = await dialog.showOpenDialog(mainWindow, {
+ipcMain.handle('dialog:selectFolder', async (event, includeCover = false) => {
+  const owner = BrowserWindow.fromWebContents(event.sender) ?? mainWindow;
+  if (!owner || owner.isDestroyed()) return null;
+  const result = await dialog.showOpenDialog(owner, {
     title: 'Seleccionar tu carpeta de música',
     properties: ['openDirectory'],
   });
   if (result.canceled || result.filePaths.length === 0) return null;
   const folderPath = result.filePaths[0];
-  await saveConfig({ musicFolder: folderPath });
-  const tracks = await scanFolder(folderPath);
+  await saveConfig({ musicFolder: folderPath }, true);
+  const tracks = await scanFolder(folderPath, Boolean(includeCover));
   return { folderPath, tracks };
 });
 
-ipcMain.handle('library:scanFolder', async (_event, folderPath: string) => scanFolder(folderPath, false));
-ipcMain.handle('library:scanWithCovers', async (_event, folderPath: string) => scanFolder(folderPath, true));
-ipcMain.handle('library:readPaths', async (_event, paths: string[]) => readTracksFromPaths(paths));
+ipcMain.handle('library:scanFolder', async (_event, folderPath: string) => {
+  const cfg = await loadConfig();
+  if (!cfg.musicFolder || path.resolve(folderPath) !== path.resolve(cfg.musicFolder)) return [];
+  return scanFolder(cfg.musicFolder, false);
+});
+
+ipcMain.handle('library:scanWithCovers', async (_event, folderPath: string) => {
+  const cfg = await loadConfig();
+  if (!cfg.musicFolder || path.resolve(folderPath) !== path.resolve(cfg.musicFolder)) return [];
+  return scanFolder(cfg.musicFolder, true);
+});
+
+ipcMain.handle('library:readPaths', async (_event, paths: string[]) =>
+  Array.isArray(paths) ? readTracksFromPaths(paths) : []
+);
 
 // Letras (LRCLIB)
 ipcMain.handle(
@@ -446,7 +461,7 @@ ipcMain.handle('wsz:list', async () => listSavedWszSkins());
 
 ipcMain.handle('wsz:importDialog', async (event) => {
   const owner = BrowserWindow.fromWebContents(event.sender) ?? mainWindow;
-  if (!owner) return null;
+  if (!owner || owner.isDestroyed()) return null;
   const result = await dialog.showOpenDialog(owner, {
     title: 'Importar skin de Winamp (.wsz)',
     properties: ['openFile'],
@@ -455,7 +470,7 @@ ipcMain.handle('wsz:importDialog', async (event) => {
   if (result.canceled || result.filePaths.length === 0) return null;
   const skin = await importWszFromPath(result.filePaths[0]);
   if (skin) {
-    await saveConfig({ activeWszSkinId: skin.meta.id });
+    await saveConfig({ activeWszSkinId: skin.meta.id }, true);
     broadcastSkinToAll(skin);
   }
   return skin;
@@ -464,7 +479,7 @@ ipcMain.handle('wsz:importDialog', async (event) => {
 ipcMain.handle('wsz:importPath', async (_event, filePath: string) => {
   const skin = await importWszFromPath(filePath);
   if (skin) {
-    await saveConfig({ activeWszSkinId: skin.meta.id });
+    await saveConfig({ activeWszSkinId: skin.meta.id }, true);
     broadcastSkinToAll(skin);
   }
   return skin;
@@ -481,13 +496,13 @@ ipcMain.handle('wsz:load', async (_event, skinId: string) => {
 
 ipcMain.handle('wsz:select', async (_event, skinId: string | null) => {
   if (!skinId) {
-    await saveConfig({ activeWszSkinId: null });
+    await saveConfig({ activeWszSkinId: null }, true);
     broadcastSkinToAll(null);
     return null;
   }
   const skin = await loadSavedWszSkin(skinId);
   if (skin) {
-    await saveConfig({ activeWszSkinId: skin.meta.id });
+    await saveConfig({ activeWszSkinId: skin.meta.id }, true);
     broadcastSkinToAll(skin);
   }
   return skin;
@@ -496,7 +511,7 @@ ipcMain.handle('wsz:select', async (_event, skinId: string | null) => {
 ipcMain.handle('wsz:delete', async (_event, skinId: string) => {
   const ok = await deleteSavedWszSkin(skinId);
   if (ok && activeSkinId === skinId) {
-    await saveConfig({ activeWszSkinId: null });
+    await saveConfig({ activeWszSkinId: null }, true);
     broadcastSkinToAll(null);
   }
   return ok;
@@ -507,37 +522,30 @@ ipcMain.handle('wsz:searchMuseum', async (_event, query: string) => searchMuseum
 ipcMain.handle('wsz:downloadMuseum', async (_event, downloadUrl: string, filename: string) => {
   const skin = await downloadMuseumSkin(downloadUrl, filename);
   if (skin) {
-    await saveConfig({ activeWszSkinId: skin.meta.id });
+    await saveConfig({ activeWszSkinId: skin.meta.id }, true);
     broadcastSkinToAll(skin);
   }
   return skin;
 });
 
-// Persistencia
+// Persistencia (campos privilegiados como musicFolder solo se modifican desde diálogos de Main)
 ipcMain.handle('config:load', async () => loadConfig());
-ipcMain.handle('config:save', async (_event, partial: Partial<AppConfig>) => saveConfig(partial));
+ipcMain.handle('config:save', async (_event, partial: Partial<AppConfig>) => saveConfig(partial, false));
 
-// Bloqueo de instancia única: evita abrir dos copias de Exum compitiendo por config.json y atajos
-const gotSingleInstanceLock = app.requestSingleInstanceLock();
-
-if (!gotSingleInstanceLock) {
-  app.quit();
-} else {
+if (gotSingleInstanceLock) {
   app.on('second-instance', () => {
-    if (!mainWindow) return;
+    if (!mainWindow || mainWindow.isDestroyed()) return;
     if (mainWindow.isMinimized()) mainWindow.restore();
     mainWindow.focus();
   });
 
   app.whenReady().then(() => {
+    // Bloquea permisos del navegador por defecto (cámara, micrófono, geolocalización, etc.)
+    session.defaultSession.setPermissionRequestHandler((_wc, _permission, callback) => callback(false));
+    session.defaultSession.setPermissionCheckHandler(() => false);
+
     createWindow();
     registerGlobalShortcuts();
-
-    app.on('activate', () => {
-      if (BrowserWindow.getAllWindows().length === 0) {
-        createWindow();
-      }
-    });
   });
 }
 
@@ -546,7 +554,5 @@ app.on('will-quit', () => {
 });
 
 app.on('window-all-closed', () => {
-  if (process.platform !== 'darwin') {
-    app.quit();
-  }
+  app.quit();
 });

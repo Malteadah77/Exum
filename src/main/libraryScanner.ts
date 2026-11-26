@@ -3,20 +3,32 @@ import * as path from 'path';
 import { pathToFileURL } from 'url';
 import { Track } from '../shared/types';
 
-const AUDIO_EXTENSIONS = new Set(['.mp3', '.wav', '.flac', '.ogg', '.m4a', '.aac']);
-const MAX_COVER_BYTES = 512 * 1024; // 512 KB máx por carátula embebida para mantener baja la RAM
+export const AUDIO_EXTENSIONS = new Set(['.mp3', '.wav', '.flac', '.ogg', '.m4a', '.aac']);
+const ALLOWED_COVER_MIMES = new Set(['image/jpeg', 'image/jpg', 'image/png', 'image/webp', 'image/gif']);
+const MAX_COVER_BYTES = 512 * 1024;
+const MAX_SCAN_DEPTH = 12;
+const MAX_SCAN_FILES = 5000;
 
 type MusicMetadataModule = typeof import('music-metadata');
 let metadataModulePromise: Promise<MusicMetadataModule> | null = null;
 
 function getMusicMetadata(): Promise<MusicMetadataModule> {
   if (!metadataModulePromise) {
-    metadataModulePromise = Function('return import("music-metadata")')() as Promise<MusicMetadataModule>;
+    metadataModulePromise = (
+      Function('return import("music-metadata")')() as Promise<MusicMetadataModule>
+    ).catch((err) => {
+      metadataModulePromise = null;
+      throw err;
+    });
   }
   return metadataModulePromise;
 }
 
-function isAudioFile(filePath: string): boolean {
+export function isUncPath(filePath: string): boolean {
+  return /^(\\\\|\/\/)/.test(filePath.trim());
+}
+
+export function isAudioFile(filePath: string): boolean {
   return AUDIO_EXTENSIONS.has(path.extname(filePath).toLowerCase());
 }
 
@@ -38,8 +50,9 @@ export async function buildTrackFromFile(filePath: string, includeCover = false)
     let coverDataUrl: string | undefined;
     if (includeCover && metadata.common.picture && metadata.common.picture.length > 0) {
       const pic = metadata.common.picture[0];
-      if (pic.data && pic.data.length <= MAX_COVER_BYTES) {
-        const mime = pic.format || 'image/jpeg';
+      const rawMime = (pic.format || 'image/jpeg').toLowerCase().split(';')[0].trim();
+      const mime = rawMime === 'image/jpg' ? 'image/jpeg' : rawMime;
+      if (pic.data && pic.data.length <= MAX_COVER_BYTES && ALLOWED_COVER_MIMES.has(mime)) {
         coverDataUrl = `data:${mime};base64,${Buffer.from(pic.data).toString('base64')}`;
       }
     }
@@ -58,7 +71,6 @@ export async function buildTrackFromFile(filePath: string, includeCover = false)
       channels: metadata.format.numberOfChannels,
       codec: metadata.format.container || fallbackCodec,
       coverDataUrl,
-      sourceType: 'local',
     };
   } catch {
     return {
@@ -71,21 +83,26 @@ export async function buildTrackFromFile(filePath: string, includeCover = false)
       album: '',
       duration: 0,
       codec: fallbackCodec,
-      sourceType: 'local',
     };
   }
 }
 
-async function collectAudioFilesRecursively(dirPath: string): Promise<string[]> {
-  const results: string[] = [];
+async function collectAudioFilesRecursively(
+  dirPath: string,
+  results: string[] = [],
+  depth = 0
+): Promise<string[]> {
+  if (depth > MAX_SCAN_DEPTH || results.length >= MAX_SCAN_FILES || isUncPath(dirPath)) {
+    return results;
+  }
 
   try {
     const entries = await fs.promises.readdir(dirPath, { withFileTypes: true });
     for (const entry of entries) {
+      if (results.length >= MAX_SCAN_FILES) break;
       const fullPath = path.join(dirPath, entry.name);
       if (entry.isDirectory()) {
-        const nested = await collectAudioFilesRecursively(fullPath);
-        results.push(...nested);
+        await collectAudioFilesRecursively(fullPath, results, depth + 1);
       } else if (entry.isFile() && isAudioFile(fullPath)) {
         results.push(fullPath);
       }
@@ -97,7 +114,7 @@ async function collectAudioFilesRecursively(dirPath: string): Promise<string[]> 
   return results;
 }
 
-async function parseTracksInBatches(
+export async function parseTracksInBatches(
   filePaths: string[],
   includeCover: boolean,
   batchSize = 20
@@ -112,6 +129,7 @@ async function parseTracksInBatches(
 }
 
 export async function scanFolder(folderPath: string, includeCover = false): Promise<Track[]> {
+  if (!folderPath || isUncPath(folderPath)) return [];
   const filePaths = await collectAudioFilesRecursively(folderPath);
   const tracks = await parseTracksInBatches(filePaths, includeCover);
   return tracks.sort((a, b) => a.title.localeCompare(b.title));
@@ -121,19 +139,20 @@ export async function readTracksFromPaths(inputPaths: string[]): Promise<Track[]
   const audioPaths: string[] = [];
 
   for (const targetPath of inputPaths) {
+    if (!targetPath || isUncPath(targetPath)) continue;
     try {
       const stats = await fs.promises.stat(targetPath);
       if (stats.isDirectory()) {
-        const nested = await collectAudioFilesRecursively(targetPath);
-        audioPaths.push(...nested);
+        await collectAudioFilesRecursively(targetPath, audioPaths, 0);
       } else if (stats.isFile() && isAudioFile(targetPath)) {
         audioPaths.push(targetPath);
       }
     } catch {
       // Omitir rutas inválidas
     }
+    if (audioPaths.length >= MAX_SCAN_FILES) break;
   }
 
-  const uniquePaths = Array.from(new Set(audioPaths));
+  const uniquePaths = Array.from(new Set(audioPaths)).slice(0, MAX_SCAN_FILES);
   return parseTracksInBatches(uniquePaths, false);
 }

@@ -5,8 +5,9 @@ export type PlaybackState = 'idle' | 'playing' | 'paused' | 'stopped';
 export interface AudioEngineCallbacks {
   onTimeUpdate?: (currentTime: number, duration: number) => void;
   onStateChange?: (state: PlaybackState) => void;
-  onTrackLoaded?: (title: string, duration: number) => void;
+  onTrackLoaded?: (duration: number) => void;
   onAudioGraphReady?: (analyser: AnalyserNode) => void;
+  onCorsFallback?: () => void;
   onEnded?: () => void;
   onError?: (message: string) => void;
 }
@@ -25,69 +26,116 @@ export function formatTime(seconds: number): string {
 
 /**
  * Motor de audio (Patrón Facade) con grafo de Web Audio API:
- * AudioElement -> MediaElementSource -> 10 BiquadFilterNodes (EQ) -> AnalyserNode -> Destination
+ * AudioElement -> MediaElementSource -> GainNode (Preamp) -> 10 BiquadFilterNodes (EQ)
+ * -> StereoPannerNode (Balance) -> AnalyserNode -> Destination
+ * Incluye fallback automático sin CORS para radios online que no envían Access-Control-Allow-Origin.
  */
 export class AudioEngine {
-  private audio: HTMLAudioElement;
+  private primaryAudio: HTMLAudioElement;
+  private fallbackAudio: HTMLAudioElement;
+  private activeAudio: HTMLAudioElement;
+  private usingFallback = false;
+
   private state: PlaybackState = 'idle';
-  private currentTitle = '';
+  private currentUrl = '';
+  private volume = 0.8;
   private callbacks: AudioEngineCallbacks;
 
-  // Nodos de Web Audio API (se crean la primera vez que se reproduce audio)
+  // Nodos de Web Audio API (creados la primera vez que se reproduce audio en primaryAudio)
   private audioCtx: AudioContext | null = null;
   private preampNode: GainNode | null = null;
   private pannerNode: StereoPannerNode | null = null;
   private filters: BiquadFilterNode[] = [];
-  private analyser: AnalyserNode | null = null;
 
   // Estado lógico del ecualizador y balance
   private eqEnabled = true;
   private preampDb = 0;
-  private balance = 0; // -1 (izquierda) a +1 (derecha)
+  private balance = 0;
   private eqGains: number[] = EQ_BANDS.map(() => 0);
 
   constructor(callbacks: AudioEngineCallbacks = {}) {
-    this.audio = new Audio();
-    this.audio.volume = 0.8;
+    this.primaryAudio = new Audio();
+    this.fallbackAudio = new Audio();
+    this.primaryAudio.volume = this.volume;
+    this.fallbackAudio.volume = this.volume;
+    this.activeAudio = this.primaryAudio;
     this.callbacks = callbacks;
 
-    this.bindEvents();
+    this.bindAudioEvents(this.primaryAudio, false);
+    this.bindAudioEvents(this.fallbackAudio, true);
   }
 
-  private bindEvents(): void {
-    this.audio.addEventListener('loadedmetadata', () => {
-      this.callbacks.onTrackLoaded?.(this.currentTitle, this.audio.duration);
+  private isRemoteUrl(url: string): boolean {
+    return url.startsWith('http://') || url.startsWith('https://');
+  }
+
+  private bindAudioEvents(el: HTMLAudioElement, isFallback: boolean): void {
+    el.addEventListener('loadedmetadata', () => {
+      if (el !== this.activeAudio) return;
+      this.callbacks.onTrackLoaded?.(el.duration);
     });
 
-    this.audio.addEventListener('timeupdate', () => {
-      this.callbacks.onTimeUpdate?.(this.audio.currentTime, this.audio.duration);
+    el.addEventListener('timeupdate', () => {
+      if (el !== this.activeAudio) return;
+      this.callbacks.onTimeUpdate?.(el.currentTime, el.duration);
     });
 
-    this.audio.addEventListener('ended', () => {
+    el.addEventListener('ended', () => {
+      if (el !== this.activeAudio) return;
       this.setState('stopped');
-      this.callbacks.onTimeUpdate?.(0, this.audio.duration);
+      this.callbacks.onTimeUpdate?.(0, el.duration);
       this.callbacks.onEnded?.();
     });
 
-    this.audio.addEventListener('error', () => {
-      this.callbacks.onError?.('No se pudo reproducir este archivo de audio.');
+    el.addEventListener('error', () => {
+      if (el !== this.activeAudio || !this.currentUrl) return;
+      if (!isFallback && !this.usingFallback && this.isRemoteUrl(this.currentUrl)) {
+        void this.activateCorsFallback();
+        return;
+      }
+      this.setState('stopped');
+      this.callbacks.onError?.('No se pudo reproducir este audio.');
     });
   }
 
-  /**
-   * Construye el grafo de procesamiento de audio una sola vez (lazy init).
-   */
+  private async activateCorsFallback(): Promise<void> {
+    if (!this.currentUrl || this.usingFallback) return;
+    const targetUrl = this.currentUrl;
+    this.usingFallback = true;
+
+    this.primaryAudio.pause();
+    this.primaryAudio.removeAttribute('src');
+    this.primaryAudio.load();
+
+    this.activeAudio = this.fallbackAudio;
+    this.fallbackAudio.crossOrigin = null;
+    this.fallbackAudio.volume = this.volume;
+    this.fallbackAudio.src = targetUrl;
+    this.fallbackAudio.load();
+
+    this.callbacks.onCorsFallback?.();
+
+    try {
+      await this.fallbackAudio.play();
+      if (this.currentUrl === targetUrl) {
+        this.setState('playing');
+      }
+    } catch (err) {
+      if (err instanceof Error && err.name === 'AbortError') return;
+      this.setState('stopped');
+      this.callbacks.onError?.('No se pudo reproducir este stream.');
+    }
+  }
+
   private ensureAudioGraph(): void {
     if (this.audioCtx) return;
 
     const ctx = new AudioContext();
-    const source = ctx.createMediaElementSource(this.audio);
+    const source = ctx.createMediaElementSource(this.primaryAudio);
 
-    // Preamp (ganancia global del EQ en dB)
     const preamp = ctx.createGain();
     preamp.gain.value = this.eqEnabled ? Math.pow(10, this.preampDb / 20) : 1;
 
-    // Creamos los 10 filtros de frecuencia en serie
     this.filters = EQ_BANDS.map((band, index) => {
       const filter = ctx.createBiquadFilter();
       if (index === 0) {
@@ -103,7 +151,6 @@ export class AudioEngine {
       return filter;
     });
 
-    // Balance estéreo (Izquierda <-> Derecha)
     const panner = ctx.createStereoPanner();
     panner.pan.value = this.balance;
 
@@ -111,7 +158,6 @@ export class AudioEngine {
     analyser.fftSize = 256;
     analyser.smoothingTimeConstant = 0.8;
 
-    // Cadena: source -> preamp -> filter[0..9] -> panner -> analyser -> speakers
     source.connect(preamp);
     let currentNode: AudioNode = preamp;
     for (const filter of this.filters) {
@@ -125,7 +171,6 @@ export class AudioEngine {
     this.audioCtx = ctx;
     this.preampNode = preamp;
     this.pannerNode = panner;
-    this.analyser = analyser;
     this.callbacks.onAudioGraphReady?.(analyser);
   }
 
@@ -144,33 +189,50 @@ export class AudioEngine {
     this.callbacks.onStateChange?.(newState);
   }
 
-  public load(fileUrl: string, title: string): void {
-    this.currentTitle = title;
-    const isRemote = fileUrl.startsWith('http://') || fileUrl.startsWith('https://');
-    // Permite que streams HTTP/HTTPS con CORS pasen por el Ecualizador y Visualizador Web Audio
-    this.audio.crossOrigin = isRemote ? 'anonymous' : null;
-    this.audio.src = fileUrl;
-    this.audio.load();
+  public load(fileUrl: string): void {
+    this.currentUrl = fileUrl;
+
+    // Limpiamos cualquier reproducción previa en el fallback
+    if (this.usingFallback) {
+      this.fallbackAudio.pause();
+      this.fallbackAudio.removeAttribute('src');
+      this.fallbackAudio.load();
+    }
+
+    this.usingFallback = false;
+    this.activeAudio = this.primaryAudio;
+    this.primaryAudio.crossOrigin = this.isRemoteUrl(fileUrl) ? 'anonymous' : null;
+    this.primaryAudio.volume = this.volume;
+    this.primaryAudio.src = fileUrl;
+    this.primaryAudio.load();
     this.setState('stopped');
   }
 
   public async play(): Promise<void> {
-    if (!this.audio.src) return;
+    if (!this.currentUrl) return;
     try {
-      this.ensureAudioGraph();
-      if (this.audioCtx?.state === 'suspended') {
-        await this.audioCtx.resume();
+      if (!this.usingFallback) {
+        this.ensureAudioGraph();
+        if (this.audioCtx?.state === 'suspended') {
+          await this.audioCtx.resume();
+        }
       }
-      await this.audio.play();
+      await this.activeAudio.play();
       this.setState('playing');
-    } catch {
+    } catch (err) {
+      if (err instanceof Error && err.name === 'AbortError') return;
+      if (!this.usingFallback && this.isRemoteUrl(this.currentUrl)) {
+        await this.activateCorsFallback();
+        return;
+      }
+      this.setState('stopped');
       this.callbacks.onError?.('Error al iniciar la reproducción.');
     }
   }
 
   public pause(): void {
-    if (!this.audio.src) return;
-    this.audio.pause();
+    if (!this.currentUrl) return;
+    this.activeAudio.pause();
     this.setState('paused');
   }
 
@@ -183,29 +245,47 @@ export class AudioEngine {
   }
 
   public stop(): void {
-    if (!this.audio.src) return;
-    this.audio.pause();
-    this.audio.currentTime = 0;
+    if (!this.currentUrl) return;
+    // Para streams en vivo liberamos la conexión HTTP para no seguir descargando en segundo plano
+    if (!Number.isFinite(this.activeAudio.duration)) {
+      const savedUrl = this.currentUrl;
+      this.activeAudio.pause();
+      this.activeAudio.removeAttribute('src');
+      this.activeAudio.load();
+      this.load(savedUrl);
+      this.callbacks.onTimeUpdate?.(0, 0);
+      return;
+    }
+
+    this.activeAudio.pause();
+    this.activeAudio.currentTime = 0;
     this.setState('stopped');
-    this.callbacks.onTimeUpdate?.(0, this.audio.duration);
+    this.callbacks.onTimeUpdate?.(0, this.activeAudio.duration);
+  }
+
+  public unload(): void {
+    this.currentUrl = '';
+    this.usingFallback = false;
+
+    for (const el of [this.primaryAudio, this.fallbackAudio]) {
+      el.pause();
+      el.removeAttribute('src');
+      el.load();
+    }
+    this.activeAudio = this.primaryAudio;
+    this.setState('idle');
+    this.callbacks.onTimeUpdate?.(0, 0);
   }
 
   public seek(seconds: number): void {
-    if (!this.audio.src || !Number.isFinite(this.audio.duration)) return;
-    this.audio.currentTime = Math.max(0, Math.min(seconds, this.audio.duration));
+    if (!this.currentUrl || !Number.isFinite(this.activeAudio.duration)) return;
+    this.activeAudio.currentTime = Math.max(0, Math.min(seconds, this.activeAudio.duration));
   }
 
   public setVolume(value: number): void {
-    const clamped = Math.max(0, Math.min(1, value));
-    this.audio.volume = clamped;
-    if (clamped > 0 && this.audio.muted) {
-      this.audio.muted = false;
-    }
-  }
-
-  public toggleMute(): boolean {
-    this.audio.muted = !this.audio.muted;
-    return this.audio.muted;
+    this.volume = Math.max(0, Math.min(1, value));
+    this.primaryAudio.volume = this.volume;
+    this.fallbackAudio.volume = this.volume;
   }
 
   // API del Ecualizador y Balance
@@ -251,19 +331,11 @@ export class AudioEngine {
     return this.eqEnabled;
   }
 
-  public getAnalyser(): AnalyserNode | null {
-    return this.analyser;
-  }
-
   public get hasTrack(): boolean {
-    return Boolean(this.audio.src);
-  }
-
-  public get isMuted(): boolean {
-    return this.audio.muted;
+    return Boolean(this.currentUrl);
   }
 
   public get currentTime(): number {
-    return this.audio.currentTime;
+    return this.activeAudio.currentTime;
   }
 }

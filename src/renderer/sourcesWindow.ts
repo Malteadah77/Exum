@@ -71,6 +71,13 @@ let discoverMode: 'audius' | 'archive' = 'audius';
 let discoverLoadedOnce = false;
 let radiosLoadedOnce = false;
 let lastArchiveAlbums: ArchiveAlbumItem[] = [];
+let discoverSeq = 0;
+let radioSeq = 0;
+let libSearchTimer: ReturnType<typeof setTimeout> | null = null;
+
+// Bloquea navegación accidental al soltar archivos o enlaces en esta ventana flotante
+document.addEventListener('dragover', (e) => e.preventDefault());
+document.addEventListener('drop', (e) => e.preventDefault());
 
 function switchTab(target: keyof typeof tabs): void {
   (Object.keys(tabs) as Array<keyof typeof tabs>).forEach((key) => {
@@ -140,7 +147,6 @@ function discoverToTrack(item: DiscoverTrackItem): Track {
     album: item.album,
     duration: item.duration,
     codec: item.source === 'audius' ? 'AUDIUS' : 'ARCHIVE',
-    sourceType: item.source,
     isLive: false,
   };
 }
@@ -157,7 +163,6 @@ function buildStreamTrack(name: string, url: string, genre = 'Radio Online', bit
     duration: 0,
     bitrate: bitrate || undefined,
     codec: 'STREAM',
-    sourceType: 'stream',
     isLive: true,
   };
 }
@@ -335,12 +340,28 @@ async function refreshLocalLibrary(): Promise<void> {
   renderLocalLibrary();
 }
 
+function appendLocalTrack(track: Track): void {
+  if (!localTracks.some((t) => t.id === track.id)) {
+    localTracks.push(track);
+    localTracks.sort((a, b) => a.title.localeCompare(b.title));
+  }
+  populateLibraryFilters();
+  renderLocalLibrary();
+}
+
 async function pickLibraryFolder(): Promise<void> {
-  const picked = await window.electronAPI.selectMusicFolder();
-  if (!picked) return;
+  // Un solo escaneo con portadas: evita leer toda la carpeta dos veces seguidas
+  showBanner(libStatusBanner, 'Escaneando carpeta y leyendo portadas ID3...');
+  const picked = await window.electronAPI.selectMusicFolder(true);
+  if (!picked) {
+    renderLocalLibrary();
+    return;
+  }
   musicFolder = picked.folderPath;
-  window.electronAPI.replaceMainPlaylist(picked.tracks, 'CARPETA LOCAL');
-  await refreshLocalLibrary();
+  localTracks = picked.tracks;
+  populateLibraryFilters();
+  renderLocalLibrary();
+  window.electronAPI.replaceMainPlaylist(picked.tracks.map(stripCoverForIpc), 'CARPETA LOCAL');
 }
 
 // =========================================================================
@@ -375,8 +396,10 @@ async function downloadDiscoverTrack(item: DiscoverTrackItem, triggerBtn: HTMLBu
     showBanner(discoverStatusBanner, `Guardado en Mi Música: ${res.track.fileName}`);
     const updatedCfg = await window.electronAPI.loadConfig();
     if (updatedCfg.musicFolder) {
+      const folderChanged = musicFolder !== updatedCfg.musicFolder;
       musicFolder = updatedCfg.musicFolder;
-      void refreshLocalLibrary();
+      if (folderChanged) void refreshLocalLibrary();
+      else appendLocalTrack(res.track);
     }
   } else {
     triggerBtn.textContent = originalLabel;
@@ -499,6 +522,7 @@ function renderArchiveAlbums(albums: ArchiveAlbumItem[]): void {
 
 async function openArchiveAlbum(album: ArchiveAlbumItem): Promise<void> {
   if (!discoverResultsList) return;
+  const reqId = ++discoverSeq;
   showBanner(discoverStatusBanner, `Cargando pistas de "${album.title}"...`);
   discoverResultsList.innerHTML = '<div class="lyrics-message">Leyendo pistas MP3 del álbum...</div>';
 
@@ -507,6 +531,7 @@ async function openArchiveAlbum(album: ArchiveAlbumItem): Promise<void> {
     album.title,
     album.creator
   );
+  if (reqId !== discoverSeq) return;
 
   const headerBar = document.createElement('div');
   headerBar.className = 'album-header-bar';
@@ -538,6 +563,7 @@ async function openArchiveAlbum(album: ArchiveAlbumItem): Promise<void> {
 
 async function runDiscoverSearch(query: string): Promise<void> {
   if (!discoverResultsList) return;
+  const reqId = ++discoverSeq;
   const trimmed = query.trim();
 
   if (discoverMode === 'audius') {
@@ -547,6 +573,7 @@ async function runDiscoverSearch(query: string): Promise<void> {
     );
     discoverResultsList.innerHTML = '<div class="lyrics-message">Consultando Audius...</div>';
     const items = await window.electronAPI.searchAudius(trimmed);
+    if (reqId !== discoverSeq) return;
     showBanner(
       discoverStatusBanner,
       trimmed
@@ -562,7 +589,9 @@ async function runDiscoverSearch(query: string): Promise<void> {
         : 'Cargando álbumes Netlabels populares en Internet Archive...'
     );
     discoverResultsList.innerHTML = '<div class="lyrics-message">Consultando Internet Archive...</div>';
-    lastArchiveAlbums = await window.electronAPI.searchArchiveAlbums(trimmed);
+    const albums = await window.electronAPI.searchArchiveAlbums(trimmed);
+    if (reqId !== discoverSeq) return;
+    lastArchiveAlbums = albums;
     showBanner(
       discoverStatusBanner,
       `Internet Archive: ${lastArchiveAlbums.length} álbumes libres con MP3`
@@ -576,9 +605,11 @@ async function runDiscoverSearch(query: string): Promise<void> {
 // =========================================================================
 async function searchRadios(query: string): Promise<void> {
   if (!radioResultsList) return;
+  const reqId = ++radioSeq;
   radioResultsList.innerHTML = '<div class="lyrics-message">Buscando radios en el mundo...</div>';
 
   const stations: RadioStationItem[] = await window.electronAPI.searchWorldRadios(query);
+  if (reqId !== radioSeq) return;
   radioResultsList.innerHTML = '';
 
   if (stations.length === 0) {
@@ -712,8 +743,14 @@ tabs.discover.btn?.addEventListener('click', () => switchTab('discover'));
 tabs.radios.btn?.addEventListener('click', () => switchTab('radios'));
 tabs.urls.btn?.addEventListener('click', () => switchTab('urls'));
 
-// Eventos Mi Música
-libSearchInput?.addEventListener('input', () => renderLocalLibrary());
+// Eventos Mi Música (búsqueda con debounce para no reconstruir el DOM en cada tecla)
+libSearchInput?.addEventListener('input', () => {
+  if (libSearchTimer) clearTimeout(libSearchTimer);
+  libSearchTimer = setTimeout(() => {
+    libSearchTimer = null;
+    renderLocalLibrary();
+  }, 150);
+});
 libArtistFilter?.addEventListener('change', () => renderLocalLibrary());
 libAlbumFilter?.addEventListener('change', () => renderLocalLibrary());
 btnLibFolder?.addEventListener('click', () => void pickLibraryFolder());
@@ -770,19 +807,36 @@ document.querySelectorAll<HTMLElement>('.radio-tag-chip').forEach((chip) => {
 // Eventos URL / .m3u / Descargar directo
 btnAddStream?.addEventListener('click', async () => {
   const rawUrl = streamUrlInput?.value.trim() ?? '';
-  if (!rawUrl.startsWith('http://') && !rawUrl.startsWith('https://')) {
+  let parsedInput: URL;
+  try {
+    parsedInput = new URL(rawUrl);
+    if (parsedInput.protocol !== 'http:' && parsedInput.protocol !== 'https:') {
+      throw new Error('Protocolo inválido');
+    }
+  } catch {
     showBanner(urlStatusBanner, 'Ingresa una URL válida (http:// o https://).');
     return;
   }
 
   showBanner(urlStatusBanner, 'Resolviendo URL...');
-  const resolved = await window.electronAPI.resolveStreamUrl(rawUrl);
-  const name = streamNameInput?.value.trim() || resolved.title || new URL(resolved.url).hostname;
+  const resolved = await window.electronAPI.resolveStreamUrl(parsedInput.toString());
+  let resolvedUrlObj: URL;
+  try {
+    resolvedUrlObj = new URL(resolved.url);
+    if (resolvedUrlObj.protocol !== 'http:' && resolvedUrlObj.protocol !== 'https:') {
+      throw new Error('Protocolo resuelto inválido');
+    }
+  } catch {
+    showBanner(urlStatusBanner, 'No se pudo resolver una URL HTTP/HTTPS válida.');
+    return;
+  }
+
+  const name = streamNameInput?.value.trim() || resolved.title || resolvedUrlObj.hostname;
 
   const newStream: SavedStream = {
     id: `custom-${Date.now()}`,
     name,
-    url: resolved.url,
+    url: resolvedUrlObj.toString(),
     genre: 'Stream personalizado',
   };
 
@@ -812,8 +866,10 @@ btnDownloadAudio?.addEventListener('click', async () => {
     if (streamUrlInput) streamUrlInput.value = '';
     const updatedCfg = await window.electronAPI.loadConfig();
     if (updatedCfg.musicFolder) {
+      const folderChanged = musicFolder !== updatedCfg.musicFolder;
       musicFolder = updatedCfg.musicFolder;
-      void refreshLocalLibrary();
+      if (folderChanged) void refreshLocalLibrary();
+      else appendLocalTrack(res.track);
     }
   } else {
     showBanner(urlStatusBanner, `Aviso: ${res.error ?? 'No se pudo descargar.'}`);
@@ -837,4 +893,4 @@ async function init(): Promise<void> {
   await refreshLocalLibrary();
 }
 
-void init();
+void init().catch(() => undefined);

@@ -1,4 +1,4 @@
-/* Estilos compartidos para las ventanas flotantes (Letras y Gestor de Skins).
+/* Estilos compartidos para las ventanas flotantes (Letras, Gestor de Skins y Biblioteca).
    Heredan en vivo la paleta exacta de pledit.txt de la skin .wsz activa. */
 
 :root {
@@ -481,22 +481,6 @@ body {
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
-}
-
-.hint-box {
-  font-size: 10px;
-  line-height: 1.5;
-  padding: 6px 8px;
-  border: 1px solid rgba(255, 255, 255, 0.15);
-  border-radius: 4px;
-  background: rgba(0, 0, 0, 0.25);
-  color: var(--wsz-pl-current);
-  opacity: 0.85;
-}
-
-.hint-box code {
-  color: var(--wsz-pl-normal);
-  user-select: text;
 }
 
 .chips-row {

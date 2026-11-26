@@ -24,6 +24,11 @@ const btnSearch = document.getElementById('btn-museum-search');
 const museumGrid = document.getElementById('museum-grid');
 
 let activeSkinId: string | null = null;
+let museumSearchSeq = 0;
+
+// Bloquea navegación accidental al soltar archivos o enlaces en esta ventana flotante
+document.addEventListener('dragover', (e) => e.preventDefault());
+document.addEventListener('drop', (e) => e.preventDefault());
 
 async function renderSavedSkins(): Promise<void> {
   if (!savedListEl) return;
@@ -67,9 +72,11 @@ async function renderSavedSkins(): Promise<void> {
 
 async function runMuseumSearch(query: string): Promise<void> {
   if (!museumGrid) return;
+  const reqId = ++museumSearchSeq;
   museumGrid.innerHTML = '<div class="lyrics-message">Buscando en Webamp Skin Museum...</div>';
 
   const items: MuseumSkinItem[] = await window.electronAPI.searchMuseumSkins(query);
+  if (reqId !== museumSearchSeq) return;
   museumGrid.innerHTML = '';
 
   if (items.length === 0) {
@@ -94,14 +101,21 @@ async function runMuseumSearch(query: string): Promise<void> {
     label.textContent = item.filename.replace(/\.wsz$/i, '');
 
     card.append(img, label);
+    let downloading = false;
     card.addEventListener('click', async () => {
+      if (downloading) return;
+      downloading = true;
       label.textContent = 'Descargando...';
-      const data = await window.electronAPI.downloadMuseumSkin(item.downloadUrl, item.filename);
-      if (data) {
-        label.textContent = `✓ ${data.meta.name}`;
-        await renderSavedSkins();
-      } else {
-        label.textContent = 'Error al descargar';
+      try {
+        const data = await window.electronAPI.downloadMuseumSkin(item.downloadUrl, item.filename);
+        if (data) {
+          label.textContent = `OK ${data.meta.name}`;
+          await renderSavedSkins();
+        } else {
+          label.textContent = 'Error al descargar';
+        }
+      } finally {
+        downloading = false;
       }
     });
 
@@ -145,4 +159,4 @@ async function init(): Promise<void> {
   void runMuseumSearch('');
 }
 
-void init();
+void init().catch(() => undefined);

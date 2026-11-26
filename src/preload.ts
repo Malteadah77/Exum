@@ -1,5 +1,5 @@
 import { contextBridge, ipcRenderer, webUtils } from 'electron';
-import {
+import type {
   AppConfig,
   ArchiveAlbumItem,
   DirectDownloadResult,
@@ -29,12 +29,13 @@ const api: ElectronAPI = {
     ipcRenderer.invoke('window:setPanels', eqState, plState) as Promise<void>,
   openFloatingWindow: (type: FloatingWindowType) =>
     ipcRenderer.invoke('window:openFloating', type) as Promise<void>,
-  openExternalUrl: (url: string) =>
-    ipcRenderer.invoke('shell:openExternal', url) as Promise<void>,
 
   openAudioFiles: () => ipcRenderer.invoke('dialog:openAudio') as Promise<Track[]>,
-  selectMusicFolder: () =>
-    ipcRenderer.invoke('dialog:selectFolder') as Promise<{ folderPath: string; tracks: Track[] } | null>,
+  selectMusicFolder: (includeCover = false) =>
+    ipcRenderer.invoke('dialog:selectFolder', includeCover) as Promise<{
+      folderPath: string;
+      tracks: Track[];
+    } | null>,
   scanFolder: (folderPath: string) =>
     ipcRenderer.invoke('library:scanFolder', folderPath) as Promise<Track[]>,
   scanFolderWithCovers: (folderPath: string) =>
@@ -51,7 +52,6 @@ const api: ElectronAPI = {
     ipcRenderer.invoke('lyrics:fetch', track) as Promise<LyricsResult>,
   broadcastTrack: (track: Track | null) => ipcRenderer.send('sync:track', track),
   broadcastTime: (currentTime: number) => ipcRenderer.send('sync:time', currentTime),
-  broadcastPalette: (palette: WszPleditColors) => ipcRenderer.send('sync:palette', palette),
   requestSeekFromLyrics: (seconds: number) => ipcRenderer.send('lyrics:seek', seconds),
   sendExternalTrack: (track: Track, autoPlay: boolean) =>
     ipcRenderer.send('external:addTrack', track, autoPlay),

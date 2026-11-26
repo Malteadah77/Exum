@@ -5,7 +5,18 @@ interface LrcLibRecord {
   plainLyrics?: string | null;
 }
 
+const MAX_CACHE_ENTRIES = 200;
+const FETCH_TIMEOUT_MS = 8_000;
 const lyricsCache = new Map<string, LyricsResult>();
+
+function setCacheBounded(key: string, value: LyricsResult): void {
+  if (!value.found) return;
+  if (lyricsCache.size >= MAX_CACHE_ENTRIES) {
+    const oldestKey = lyricsCache.keys().next().value;
+    if (oldestKey !== undefined) lyricsCache.delete(oldestKey);
+  }
+  lyricsCache.set(key, value);
+}
 
 /**
  * Parsea formato LRC estándar: "[01:23.45] Texto de la línea"
@@ -32,10 +43,6 @@ function parseLrc(lrcText: string): LyricLine[] {
   return lines.sort((a, b) => a.time - b.time);
 }
 
-/**
- * Si el MP3 no tiene tag de artista pero su nombre es "Artista - Canción",
- * separamos ambos para mejorar la búsqueda en LRCLIB.
- */
 function normalizeQuery(title: string, artist: string): { cleanTitle: string; cleanArtist: string } {
   const cleanedTitle = title.replace(/\s*\(.*?\)\s*|\s*\[.*?\]\s*/g, ' ').trim();
   const isUnknownArtist = !artist || artist.toLowerCase() === 'artista desconocido';
@@ -85,7 +92,6 @@ function buildResult(record: LrcLibRecord | null): LyricsResult {
 
 /**
  * Consulta letras sincronizadas en LRCLIB (API pública gratuita) desde el Main Process.
- * Hacerlo aquí mantiene estricta la seguridad CSP del Renderer y evita problemas de CORS.
  */
 export async function fetchLyrics(params: {
   title: string;
@@ -99,10 +105,9 @@ export async function fetchLyrics(params: {
   const cached = lyricsCache.get(cacheKey);
   if (cached) return cached;
 
-  const headers = { 'User-Agent': 'ExumPlayer/0.4 (https://github.com/Malteadah77/Exum)' };
+  const headers = { 'User-Agent': 'ExumPlayer/1.1 (https://github.com/Malteadah77/Exum)' };
 
   try {
-    // 1. Intento exacto si tenemos artista y título
     if (cleanArtist && cleanTitle) {
       const url = new URL('https://lrclib.net/api/get');
       url.searchParams.set('track_name', cleanTitle);
@@ -110,33 +115,37 @@ export async function fetchLyrics(params: {
       if (params.album) url.searchParams.set('album_name', params.album);
       if (params.duration > 0) url.searchParams.set('duration', String(Math.round(params.duration)));
 
-      const res = await fetch(url.toString(), { headers });
+      const res = await fetch(url.toString(), {
+        headers,
+        signal: AbortSignal.timeout(FETCH_TIMEOUT_MS),
+      });
       if (res.ok) {
         const data = (await res.json()) as LrcLibRecord;
         const result = buildResult(data);
         if (result.found) {
-          lyricsCache.set(cacheKey, result);
+          setCacheBounded(cacheKey, result);
           return result;
         }
       }
     }
 
-    // 2. Fallback: búsqueda general por texto
     const queryText = cleanArtist ? `${cleanArtist} ${cleanTitle}` : cleanTitle;
     const searchUrl = new URL('https://lrclib.net/api/search');
     searchUrl.searchParams.set('q', queryText);
 
-    const searchRes = await fetch(searchUrl.toString(), { headers });
+    const searchRes = await fetch(searchUrl.toString(), {
+      headers,
+      signal: AbortSignal.timeout(FETCH_TIMEOUT_MS),
+    });
     if (searchRes.ok) {
       const list = (await searchRes.json()) as LrcLibRecord[];
-      // Preferimos el primer resultado que tenga letra sincronizada
       const best = list.find((item) => Boolean(item.syncedLyrics)) ?? list[0] ?? null;
       const result = buildResult(best);
-      lyricsCache.set(cacheKey, result);
+      setCacheBounded(cacheKey, result);
       return result;
     }
   } catch {
-    // Sin conexión o error temporal de red
+    // Sin conexión o timeout temporal
   }
 
   return { found: false, synced: false, lines: [], plainText: '' };

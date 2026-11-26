@@ -8,8 +8,10 @@ import AdmZip from 'adm-zip';
 import { formatTime } from '../dist/renderer/audioEngine.js';
 import { PlaylistManager } from '../dist/renderer/playlistManager.js';
 import wszService from '../dist/main/wszService.js';
+import libraryScanner from '../dist/main/libraryScanner.js';
 
 const { parseWszSkin } = wszService;
+const { isAudioFile, isUncPath } = libraryScanner;
 
 function makeTrack(id, title, artist = 'Artist', duration = 180) {
   return {
@@ -131,4 +133,41 @@ test('parseWszSkin extrae sprites, pledit.txt y viscolor.txt desde un archivo .w
   } finally {
     fs.unlinkSync(tmpFile);
   }
+});
+
+test('parseWszSkin sanitiza colores maliciosos/sin # y fuentes en pledit.txt', () => {
+  const tmpFile = path.join(os.tmpdir(), `exum-sec-${Date.now()}.wsz`);
+  const zip = new AdmZip();
+
+  zip.addFile(
+    'PLEDIT.TXT',
+    Buffer.from(
+      '[Text]\r\n' +
+        'Normal=00ff88 ; inline comment\r\n' +
+        'Current=#AABBCC\r\n' +
+        'NormalBG=url("https://evil.example/x") #000\r\n' +
+        'SelectedBG=invalid\r\n' +
+        'Font=Arial; url(bad)\r\n'
+    )
+  );
+  zip.writeZip(tmpFile);
+
+  try {
+    const parsed = parseWszSkin(tmpFile);
+    assert.equal(parsed.pledit.normal, '#00ff88');
+    assert.equal(parsed.pledit.current, '#aabbcc');
+    assert.equal(parsed.pledit.normalBg, '#0e090b');
+    assert.equal(parsed.pledit.selectedBg, '#5a1423');
+    assert.equal(parsed.pledit.font, '"Arial", Consolas, monospace');
+  } finally {
+    fs.unlinkSync(tmpFile);
+  }
+});
+
+test('isUncPath e isAudioFile bloquean rutas UNC/SMB y archivos no multimedia', () => {
+  assert.equal(isUncPath('\\\\attacker\\share\\song.mp3'), true);
+  assert.equal(isUncPath('//attacker/share/song.mp3'), true);
+  assert.equal(isUncPath('C:\\Music\\song.mp3'), false);
+  assert.equal(isAudioFile('C:\\Music\\song.mp3'), true);
+  assert.equal(isAudioFile('C:\\Windows\\System32\\cmd.exe'), false);
 });

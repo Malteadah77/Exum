@@ -4,13 +4,11 @@ export type RepeatMode = 'off' | 'all' | 'one';
 export type VisualizerMode = 'bars' | 'wave' | 'off';
 export type ShortcutAction = 'play-pause' | 'next' | 'previous' | 'stop';
 export type FloatingWindowType = 'lyrics' | 'skins' | 'sources';
-export type TrackSourceType = 'local' | 'stream' | 'audius' | 'archive';
 export type PanelState = 'open' | 'shaded' | 'closed';
 
 export interface WszSkinMeta {
   id: string;
   name: string;
-  filePath: string;
 }
 
 export interface WszPleditColors {
@@ -45,7 +43,6 @@ export interface WszSkinData {
 }
 
 export interface MuseumSkinItem {
-  md5: string;
   filename: string;
   downloadUrl: string;
   screenshotUrl: string;
@@ -59,7 +56,6 @@ export interface SavedStream {
 }
 
 export interface RadioStationItem {
-  id: string;
   name: string;
   url: string;
   country: string;
@@ -98,7 +94,6 @@ export interface SavedPlaylist {
   id: string;
   name: string;
   tracks: Track[];
-  updatedAt: number;
 }
 
 export interface LyricLine {
@@ -127,7 +122,6 @@ export interface Track {
   channels?: number;
   codec?: string;
   coverDataUrl?: string;
-  sourceType?: TrackSourceType;
   isLive?: boolean;
 }
 
@@ -138,7 +132,6 @@ export interface AppConfig {
   shuffle: boolean;
   repeatMode: RepeatMode;
   eqEnabled: boolean;
-  eqPreset: string;
   eqGains: number[];
   visualizerMode: VisualizerMode;
   savedStreams: SavedStream[];
@@ -154,11 +147,10 @@ export interface ElectronAPI {
   setMiniMode: (enabled: boolean) => Promise<boolean>;
   setWindowPanels: (eqState: PanelState, plState: PanelState) => Promise<void>;
   openFloatingWindow: (type: FloatingWindowType) => Promise<void>;
-  openExternalUrl: (url: string) => Promise<void>;
 
   // Biblioteca local y archivos
   openAudioFiles: () => Promise<Track[]>;
-  selectMusicFolder: () => Promise<{ folderPath: string; tracks: Track[] } | null>;
+  selectMusicFolder: (includeCover?: boolean) => Promise<{ folderPath: string; tracks: Track[] } | null>;
   scanFolder: (folderPath: string) => Promise<Track[]>;
   scanFolderWithCovers: (folderPath: string) => Promise<Track[]>;
   readDroppedPaths: (paths: string[]) => Promise<Track[]>;
@@ -172,7 +164,6 @@ export interface ElectronAPI {
   fetchLyrics: (track: Pick<Track, 'title' | 'artist' | 'album' | 'duration'>) => Promise<LyricsResult>;
   broadcastTrack: (track: Track | null) => void;
   broadcastTime: (currentTime: number) => void;
-  broadcastPalette: (palette: WszPleditColors) => void;
   requestSeekFromLyrics: (seconds: number) => void;
   sendExternalTrack: (track: Track, autoPlay: boolean) => void;
   replaceMainPlaylist: (tracks: Track[], label?: string) => void;

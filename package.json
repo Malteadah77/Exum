@@ -4,13 +4,13 @@
   "description": "Exum — Reproductor de audio estilo Winamp moderno con skins .wsz, ecualizador de 10 bandas, letras sincronizadas, biblioteca local y explorador libre",
   "main": "dist/main.js",
   "scripts": {
+    "clean": "node -e \"require('fs').rmSync('dist',{recursive:true,force:true})\"",
     "build:main": "tsc -p tsconfig.main.json",
     "build:renderer": "tsc -p tsconfig.renderer.json && node -e \"require('fs').writeFileSync('dist/renderer/package.json', JSON.stringify({type:'module'}))\"",
-    "build": "npm run build:main && npm run build:renderer",
+    "build": "npm run clean && npm run build:main && npm run build:renderer",
     "start": "npm run build && electron .",
     "test": "npm run build && node --test tests/exum.test.mjs",
-    "dist": "npm run build && electron-builder --win portable",
-    "dist:installer": "npm run build && electron-builder --win nsis"
+    "dist": "npm run build && electron-builder --win portable"
   },
   "build": {
     "appId": "com.exum.player",
@@ -20,7 +20,8 @@
     },
     "files": [
       "dist/**/*",
-      "assets/**/*",
+      "!dist/renderer/package.json",
+      "assets/icon.ico",
       "styles/**/*",
       "index.html",
       "lyrics.html",
@@ -42,14 +43,14 @@
       "artifactName": "Exum-${version}-portable.exe"
     }
   },
-  "keywords": [],
-  "author": "",
+  "keywords": ["music-player", "winamp", "wsz", "electron", "audio", "equalizer"],
+  "author": "Malteadah77",
   "license": "ISC",
   "type": "commonjs",
   "devDependencies": {
     "@types/adm-zip": "^0.5.8",
     "@types/node": "^26.6.10",
-    "electron": "^45.5.0",
+    "electron": "45.5.0",
     "electron-builder": "^26.18.0",
     "typescript": "^7.0.2"
   },

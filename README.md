@@ -11,7 +11,7 @@ No necesitas instalar nada ni configurar Node.js: **Exum** viene como ejecutable
    - *Nota de Windows SmartScreen:* como es un proyecto personal sin firma comercial de pago, la primera vez Windows puede mostrar *"Windows protegió su PC"*. Haz clic en **Más información → Ejecutar de todas formas**.
 3. **Primeros pasos dentro de Exum:**
    - **Tu música local:** haz clic en **`LIB`** (o **`ADD` → `Elegir carpeta`**) para vincular tu carpeta de música con portadas de álbumes, filtros por artista/álbum y favoritos, o arrastra archivos `.mp3` / `.flac` / `.wav` directamente encima de la ventana.
-   - **Conseguir y escuchar música libre al instante:** abre **`LIB` → `Explorar`** para reproducir música gratuita desde **Audius** o explorar y descargar álbumes completos en MP3 Creative Commons desde **Internet Archive** directo a tu carpeta local (cero cuentas, cero API keys).
+   - **Conseguir y escuchar música libre al instante:** abre **`LIB` → `Explorar`** para reproducir música gratuita desde **Audius** o explorar álbumes Creative Commons en **Internet Archive**, cargar sus pistas en streaming o descargar pistas individuales en MP3 directo a tu carpeta local (cero cuentas, cero API keys).
    - **Cambiar skin estilo Winamp:** presiona **`SKINS`** abajo a la derecha para buscar y descargar skins del *Webamp Skin Museum* en 1 clic (o arrastra cualquier archivo `.wsz` sobre la ventana).
    - **Letras sincronizadas:** presiona **`LRC`** para abrir la ventana flotante de letras en vivo.
 
@@ -62,7 +62,7 @@ npm run dist
 
 ## Arquitectura
 
-- `src/shared/types.ts` — Contratos TypeScript compartidos (única fuente de verdad).
-- `src/main/` — Proceso principal Node.js (`configStore`, `libraryScanner`, `lyricsService`, `wszService`, `playlistStore`, `externalSourcesService`).
-- `src/preload.ts` — Puente seguro `contextBridge` con principio de mínimo privilegio (`contextIsolation: true`).
-- `src/renderer/` — Interfaz y motor de audio (`audioEngine`, `playlistManager`, `visualizer`, `wszRenderer`, `lyricsController`, y ventanas flotantes).
+- `src/shared/types.d.ts` — Contratos TypeScript compartidos (única fuente de verdad, sin emisión JS duplicada).
+- `src/main.ts` y `src/main/` — Proceso principal Node.js (`configStore`, `libraryScanner`, `lyricsService`, `wszService`, `playlistStore`, `externalSourcesService`).
+- `src/preload.ts` — Puente seguro `contextBridge` con `contextIsolation: true` y `sandbox: true`.
+- `src/renderer/` — Interfaz y motor de audio (`app`, `audioEngine`, `equalizerPresets`, `playlistManager`, `visualizer`, `wszRenderer`, `lyricsController`, y ventanas flotantes).

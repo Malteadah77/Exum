@@ -1,5 +1,5 @@
 /* =========================================================
-   EXUM v0.5 — INTERFAZ UNIFICADA WINAMP (.wsz) ESCALABLE
+   EXUM v1.1 — INTERFAZ UNIFICADA WINAMP (.wsz) ESCALABLE
    Paleta base elegante: Rojo vino (#c93b52) + Negro (#0e090b)
    ========================================================= */
 
@@ -914,8 +914,7 @@ body.mini-mode .mini-bar {
   cursor: pointer;
 }
 
-.wsz-preset-item:hover,
-.wsz-preset-item.active {
+.wsz-preset-item:hover {
   background: var(--wsz-pl-sel);
   color: var(--wsz-pl-current);
 }

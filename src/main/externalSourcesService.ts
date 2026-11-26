@@ -8,7 +8,7 @@ import {
   RadioStationItem,
 } from '../shared/types';
 import { loadConfig, saveConfig } from './configStore';
-import { buildTrackFromFile } from './libraryScanner';
+import { AUDIO_EXTENSIONS, buildTrackFromFile } from './libraryScanner';
 
 const RADIO_BROWSER_MIRRORS = [
   'https://de1.api.radio-browser.info',
@@ -17,7 +17,12 @@ const RADIO_BROWSER_MIRRORS = [
 ];
 
 const AUDIUS_API = 'https://api.audius.co/v1';
-const DIRECT_AUDIO_EXTS = new Set(['.mp3', '.wav', '.flac', '.ogg', '.m4a', '.aac']);
+const API_TIMEOUT_MS = 10_000;
+const DOWNLOAD_TIMEOUT_MS = 45_000;
+const MAX_PLAYLIST_BYTES = 512 * 1024;
+const MAX_AUDIO_DOWNLOAD_BYTES = 150 * 1024 * 1024;
+const WINDOWS_RESERVED_RE = /^(con|prn|aux|nul|com[1-9]|lpt[1-9])$/i;
+
 const MIME_TO_EXT: Record<string, string> = {
   'audio/mpeg': '.mp3',
   'audio/mp3': '.mp3',
@@ -28,6 +33,60 @@ const MIME_TO_EXT: Record<string, string> = {
   'audio/mp4': '.m4a',
   'audio/aac': '.aac',
 };
+
+function isPrivateOrLoopbackHost(hostname: string): boolean {
+  const h = hostname.toLowerCase().replace(/^\[|\]$/g, '');
+  if (h === 'localhost' || h === '::1' || h === '0.0.0.0' || h.endsWith('.local')) return true;
+  if (/^127\./.test(h) || /^10\./.test(h) || /^192\.168\./.test(h) || /^169\.254\./.test(h)) return true;
+  if (/^172\.(1[6-9]|2\d|3[01])\./.test(h)) return true;
+  return false;
+}
+
+function parseSafeRemoteUrl(rawUrl: string, blockPrivate: boolean): URL | null {
+  try {
+    const parsed = new URL(rawUrl.trim());
+    if (parsed.protocol !== 'http:' && parsed.protocol !== 'https:') return null;
+    if (blockPrivate && isPrivateOrLoopbackHost(parsed.hostname)) return null;
+    return parsed;
+  } catch {
+    return null;
+  }
+}
+
+function sanitizeHttpsUrl(rawUrl?: string): string | undefined {
+  if (!rawUrl) return undefined;
+  try {
+    const u = new URL(rawUrl);
+    return u.protocol === 'https:' ? u.toString() : undefined;
+  } catch {
+    return undefined;
+  }
+}
+
+async function readResponseTextBounded(res: Response, maxBytes: number): Promise<string> {
+  if (!res.body) return '';
+  const reader = res.body.getReader();
+  const chunks: Buffer[] = [];
+  let total = 0;
+
+  while (true) {
+    const { done, value } = await reader.read();
+    if (done) break;
+    if (value) {
+      total += value.byteLength;
+      if (total > maxBytes) {
+        await reader.cancel();
+        throw new Error('Respuesta demasiado grande.');
+      }
+      chunks.push(Buffer.from(value));
+    }
+  }
+  return Buffer.concat(chunks).toString('utf-8');
+}
+
+function escapeLuceneQuery(raw: string): string {
+  return raw.replace(/[+\-&|!(){}[\]^"~*?:\\/]/g, ' ').replace(/\s+/g, ' ').trim();
+}
 
 // ---------- 1. AUDIUS (MÚSICA LIBRE ABIERTA, CERO CUENTAS, 206 MP3 + CORS *) ----------
 interface RawAudiusTrack {
@@ -49,7 +108,10 @@ export async function searchAudiusTracks(query: string): Promise<DiscoverTrackIt
     : `${AUDIUS_API}/tracks/trending?app_name=ExumPlayer`;
 
   try {
-    const res = await fetch(endpoint, { headers: { 'User-Agent': 'ExumPlayer/1.1' } });
+    const res = await fetch(endpoint, {
+      headers: { 'User-Agent': 'ExumPlayer/1.1' },
+      signal: AbortSignal.timeout(API_TIMEOUT_MS),
+    });
     if (!res.ok) return [];
     const json = (await res.json()) as { data?: RawAudiusTrack[] };
     const list = Array.isArray(json.data) ? json.data : [];
@@ -69,7 +131,7 @@ export async function searchAudiusTracks(query: string): Promise<DiscoverTrackIt
           genre: t.genre || 'Libre',
           streamUrl,
           downloadUrl: t.is_downloadable ? streamUrl : undefined,
-          artworkUrl: t.artwork?.['150x150'],
+          artworkUrl: sanitizeHttpsUrl(t.artwork?.['150x150']),
         };
       });
   } catch {
@@ -85,16 +147,19 @@ interface RawArchiveDoc {
 }
 
 export async function searchArchiveAlbums(query: string): Promise<ArchiveAlbumItem[]> {
-  const trimmed = query.trim();
-  const searchPart = trimmed
-    ? `collection:(netlabels OR opensource_audio) AND mediatype:audio AND format:"VBR MP3" AND (${trimmed})`
+  const escaped = escapeLuceneQuery(query);
+  const searchPart = escaped
+    ? `collection:(netlabels OR opensource_audio) AND mediatype:audio AND format:"VBR MP3" AND (${escaped})`
     : `collection:(netlabels OR opensource_audio) AND mediatype:audio AND format:"VBR MP3"`;
 
   try {
     const url =
       `https://archive.org/advancedsearch.php?q=${encodeURIComponent(searchPart)}` +
       `&fl[]=identifier&fl[]=title&fl[]=creator&sort[]=downloads+desc&rows=20&output=json`;
-    const res = await fetch(url, { headers: { 'User-Agent': 'ExumPlayer/1.1' } });
+    const res = await fetch(url, {
+      headers: { 'User-Agent': 'ExumPlayer/1.1' },
+      signal: AbortSignal.timeout(API_TIMEOUT_MS),
+    });
     if (!res.ok) return [];
 
     const json = (await res.json()) as { response?: { docs?: RawArchiveDoc[] } };
@@ -139,7 +204,10 @@ export async function getArchiveAlbumTracks(
   try {
     const res = await fetch(
       `https://archive.org/metadata/${encodeURIComponent(identifier)}/files`,
-      { headers: { 'User-Agent': 'ExumPlayer/1.1' } }
+      {
+        headers: { 'User-Agent': 'ExumPlayer/1.1' },
+        signal: AbortSignal.timeout(API_TIMEOUT_MS),
+      }
     );
     if (!res.ok) return [];
 
@@ -174,7 +242,6 @@ export async function getArchiveAlbumTracks(
 
 // ---------- 3. RADIO BROWSER (+30,000 EMISORAS DEL MUNDO) ----------
 interface RawRadioStation {
-  stationuuid?: string;
   name?: string;
   url_resolved?: string;
   url?: string;
@@ -194,13 +261,19 @@ export async function searchWorldRadios(query: string): Promise<RadioStationItem
         : `${base}/json/stations/topclick/24?hidebroken=true`;
 
       const requests: Promise<Response>[] = [
-        fetch(endpoint, { headers: { 'User-Agent': 'ExumPlayer/1.1' } }),
+        fetch(endpoint, {
+          headers: { 'User-Agent': 'ExumPlayer/1.1' },
+          signal: AbortSignal.timeout(API_TIMEOUT_MS),
+        }),
       ];
       if (trimmed) {
         requests.push(
           fetch(
             `${base}/json/stations/bytag/${encodeURIComponent(trimmed.toLowerCase())}?hidebroken=true&order=clickcount&reverse=true&limit=20`,
-            { headers: { 'User-Agent': 'ExumPlayer/1.1' } }
+            {
+              headers: { 'User-Agent': 'ExumPlayer/1.1' },
+              signal: AbortSignal.timeout(API_TIMEOUT_MS),
+            }
           )
         );
       }
@@ -221,12 +294,11 @@ export async function searchWorldRadios(query: string): Promise<RadioStationItem
 
       for (const st of combined) {
         const streamUrl = (st.url_resolved || st.url || '').trim();
-        if (!streamUrl.startsWith('http://') && !streamUrl.startsWith('https://')) continue;
+        if (!parseSafeRemoteUrl(streamUrl, true)) continue;
         if (seenUrls.has(streamUrl)) continue;
         seenUrls.add(streamUrl);
 
         stations.push({
-          id: st.stationuuid || streamUrl,
           name: (st.name || 'Radio sin nombre').trim(),
           url: streamUrl,
           country: st.country || '',
@@ -247,25 +319,33 @@ export async function searchWorldRadios(query: string): Promise<RadioStationItem
   return [];
 }
 
-// ---------- 4. RESOLVER .m3u / .pls Y DESCARGA DE AUDIO DIRECTO ABIERTO ----------
+// ---------- 4. RESOLVER .m3u / .pls Y DESCARGA SEGURA EN STREAMING ----------
 export async function resolveStreamUrl(rawUrl: string): Promise<{ url: string; title?: string }> {
-  const cleanUrl = rawUrl.trim();
-  const lower = cleanUrl.toLowerCase().split('?')[0];
+  const parsed = parseSafeRemoteUrl(rawUrl, false);
+  if (!parsed) return { url: '' };
+
+  const cleanUrl = parsed.toString();
+  const lowerPath = parsed.pathname.toLowerCase();
   const isPlaylistUrl =
-    lower.endsWith('.m3u') || lower.endsWith('.m3u8') || lower.endsWith('.pls');
+    lowerPath.endsWith('.m3u') || lowerPath.endsWith('.m3u8') || lowerPath.endsWith('.pls');
 
   if (!isPlaylistUrl) return { url: cleanUrl };
 
   try {
-    const res = await fetch(cleanUrl, { headers: { 'User-Agent': 'ExumPlayer/1.1' } });
+    const res = await fetch(cleanUrl, {
+      headers: { 'User-Agent': 'ExumPlayer/1.1' },
+      signal: AbortSignal.timeout(API_TIMEOUT_MS),
+    });
     if (!res.ok) return { url: cleanUrl };
-    const text = await res.text();
+    const text = await readResponseTextBounded(res, MAX_PLAYLIST_BYTES);
 
-    if (lower.endsWith('.pls')) {
+    if (lowerPath.endsWith('.pls')) {
       const fileMatch = text.match(/^File1\s*=\s*(.+)$/im);
       const titleMatch = text.match(/^Title1\s*=\s*(.+)$/im);
-      if (fileMatch?.[1]) {
-        return { url: fileMatch[1].trim(), title: titleMatch?.[1]?.trim() };
+      const candidate = fileMatch?.[1]?.trim();
+      // Validamos estrictamente esquema http/https para evitar bypass hacia file:// o data:
+      if (candidate && parseSafeRemoteUrl(candidate, false)) {
+        return { url: candidate, title: titleMatch?.[1]?.trim() };
       }
     } else {
       let extTitle: string | undefined;
@@ -277,20 +357,41 @@ export async function resolveStreamUrl(rawUrl: string): Promise<{ url: string; t
           if (comma !== -1) extTitle = line.slice(comma + 1).trim();
           continue;
         }
-        if (line.startsWith('http://') || line.startsWith('https://')) {
+        if (parseSafeRemoteUrl(line, false)) {
           return { url: line, title: extTitle };
         }
       }
     }
   } catch {
-    // Fallback
+    // Fallback al enlace original validado
   }
 
   return { url: cleanUrl };
 }
 
-function sanitizeFileName(name: string): string {
-  return name.replace(/[<>:"/\\|?*]+/g, '_').trim();
+function sanitizeDownloadStem(raw: string): string {
+  const cleaned = raw
+    .replace(/[\x00-\x1f<>:"/\\|?*]+/g, '_')
+    .replace(/[. ]+$/g, '')
+    .trim()
+    .slice(0, 120);
+  if (!cleaned || WINDOWS_RESERVED_RE.test(cleaned)) {
+    return `audio-${Date.now()}`;
+  }
+  return cleaned;
+}
+
+async function resolveUniqueDestPath(folder: string, stem: string, ext: string): Promise<string> {
+  let candidate = path.join(folder, `${stem}${ext}`);
+  for (let n = 2; n < 1000; n++) {
+    try {
+      await fs.promises.access(candidate);
+      candidate = path.join(folder, `${stem}-${n}${ext}`);
+    } catch {
+      return candidate;
+    }
+  }
+  return path.join(folder, `${stem}-${Date.now()}${ext}`);
 }
 
 export async function downloadDirectAudioToLibrary(
@@ -298,24 +399,47 @@ export async function downloadDirectAudioToLibrary(
   customName: string | undefined,
   owner: BrowserWindow | null
 ): Promise<DirectDownloadResult> {
-  const cleanUrl = rawUrl.trim();
-  if (!cleanUrl.startsWith('http://') && !cleanUrl.startsWith('https://')) {
-    return { ok: false, error: 'Ingresa una URL válida (http:// o https://).' };
+  if (!parseSafeRemoteUrl(rawUrl, true)) {
+    return { ok: false, error: 'Ingresa una URL pública válida (http:// o https://).' };
   }
 
+  let tmpPath: string | null = null;
   try {
-    const resolved = await resolveStreamUrl(cleanUrl);
-    const res = await fetch(resolved.url, { headers: { 'User-Agent': 'ExumPlayer/1.1' } });
-    if (!res.ok) {
+    const resolved = await resolveStreamUrl(rawUrl);
+    const resolvedParsed = parseSafeRemoteUrl(resolved.url, true);
+    if (!resolvedParsed) {
+      return { ok: false, error: 'La URL resuelta no es una dirección pública HTTP/HTTPS válida.' };
+    }
+
+    const res = await fetch(resolvedParsed.toString(), {
+      headers: { 'User-Agent': 'ExumPlayer/1.1' },
+      signal: AbortSignal.timeout(DOWNLOAD_TIMEOUT_MS),
+    });
+    if (!res.ok || !res.body) {
       return { ok: false, error: `El servidor respondió HTTP ${res.status}.` };
     }
 
+    // Validamos destino final tras posibles redirecciones HTTP
+    if (res.url && !parseSafeRemoteUrl(res.url, true)) {
+      return { ok: false, error: 'Redirección bloqueada por seguridad.' };
+    }
+
+    // Rechazamos radios continuas Icecast/Shoutcast para evitar descargas infinitas / OOM
+    if (res.headers.has('icy-metaint') || res.headers.has('icy-name') || res.headers.has('icy-br')) {
+      await res.body.cancel().catch(() => undefined);
+      return {
+        ok: false,
+        error: 'Es una radio en vivo (stream continuo), no un archivo descargable.',
+      };
+    }
+
     const contentType = (res.headers.get('content-type') || '').split(';')[0].trim().toLowerCase();
-    const urlPath = new URL(resolved.url).pathname;
+    const urlPath = resolvedParsed.pathname;
     const urlExt = path.extname(urlPath).toLowerCase();
 
-    const ext = DIRECT_AUDIO_EXTS.has(urlExt) ? urlExt : MIME_TO_EXT[contentType];
+    const ext = AUDIO_EXTENSIONS.has(urlExt) ? urlExt : MIME_TO_EXT[contentType];
     if (!ext) {
+      await res.body.cancel().catch(() => undefined);
       return {
         ok: false,
         error: 'La URL no apunta a un archivo de audio directo (.mp3, .wav, .flac, .ogg, .m4a).',
@@ -323,7 +447,8 @@ export async function downloadDirectAudioToLibrary(
     }
 
     const contentLength = Number(res.headers.get('content-length') || 0);
-    if (contentLength > 150 * 1024 * 1024) {
+    if (contentLength > MAX_AUDIO_DOWNLOAD_BYTES) {
+      await res.body.cancel().catch(() => undefined);
       return { ok: false, error: 'El archivo excede el límite de seguridad de 150 MB.' };
     }
 
@@ -331,27 +456,69 @@ export async function downloadDirectAudioToLibrary(
     let targetFolder = config.musicFolder;
 
     if (!targetFolder) {
-      if (!owner) return { ok: false, error: 'Elige primero una carpeta de música.' };
+      if (!owner || owner.isDestroyed()) {
+        await res.body.cancel().catch(() => undefined);
+        return { ok: false, error: 'Elige primero una carpeta de música.' };
+      }
       const pick = await dialog.showOpenDialog(owner, {
         title: 'Elegir carpeta para guardar el audio',
         properties: ['openDirectory'],
       });
       if (pick.canceled || pick.filePaths.length === 0) {
+        await res.body.cancel().catch(() => undefined);
         return { ok: false, error: 'Descarga cancelada.' };
       }
       targetFolder = pick.filePaths[0];
-      await saveConfig({ musicFolder: targetFolder });
+      await saveConfig({ musicFolder: targetFolder }, true);
     }
 
-    const baseNameRaw =
-      customName?.trim() ||
-      resolved.title ||
-      decodeURIComponent(path.parse(urlPath).name || `audio-${Date.now()}`);
-    const safeFileName = `${sanitizeFileName(baseNameRaw)}${ext}`;
-    const destPath = path.join(targetFolder, safeFileName);
+    let decodedUrlStem = '';
+    try {
+      decodedUrlStem = decodeURIComponent(path.parse(urlPath).name);
+    } catch {
+      decodedUrlStem = path.parse(urlPath).name;
+    }
 
-    const buffer = Buffer.from(await res.arrayBuffer());
-    await fs.promises.writeFile(destPath, buffer);
+    const baseNameRaw = customName?.trim() || resolved.title || decodedUrlStem || `audio-${Date.now()}`;
+    const safeStem = sanitizeDownloadStem(baseNameRaw);
+    const destPath = await resolveUniqueDestPath(targetFolder, safeStem, ext);
+    tmpPath = path.join(targetFolder, `.exum-dl-${process.pid}-${Date.now()}.tmp`);
+
+    // Descarga en streaming directo a disco con tope real de bytes (cero OOM en RAM)
+    const fileStream = fs.createWriteStream(tmpPath);
+    const reader = res.body.getReader();
+    let writtenBytes = 0;
+
+    try {
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+        if (value) {
+          writtenBytes += value.byteLength;
+          if (writtenBytes > MAX_AUDIO_DOWNLOAD_BYTES) {
+            await reader.cancel();
+            fileStream.destroy();
+            return { ok: false, error: 'La descarga superó el límite de seguridad de 150 MB.' };
+          }
+          if (!fileStream.write(Buffer.from(value))) {
+            await new Promise<void>((resolve, reject) => {
+              fileStream.once('drain', resolve);
+              fileStream.once('error', reject);
+            });
+          }
+        }
+      }
+      await new Promise<void>((resolve, reject) => {
+        fileStream.end(() => resolve());
+        fileStream.once('error', reject);
+      });
+    } catch (streamErr) {
+      fileStream.destroy();
+      throw streamErr;
+    }
+
+    await fs.promises.rename(tmpPath, destPath);
+    tmpPath = null;
 
     const track = await buildTrackFromFile(destPath, true);
     return { ok: true, track };
@@ -360,5 +527,9 @@ export async function downloadDirectAudioToLibrary(
       ok: false,
       error: err instanceof Error ? err.message : 'No se pudo descargar el archivo de audio.',
     };
+  } finally {
+    if (tmpPath) {
+      await fs.promises.unlink(tmpPath).catch(() => undefined);
+    }
   }
 }

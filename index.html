@@ -5,7 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <meta
     http-equiv="Content-Security-Policy"
-    content="default-src 'self'; media-src 'self' file: http: https:; img-src 'self' data:; style-src 'self' 'unsafe-inline';"
+    content="default-src 'self'; media-src 'self' file: http: https:; img-src 'self' data:; style-src 'self' 'unsafe-inline'; object-src 'none'; base-uri 'none'; form-action 'none';"
   />
   <title>Exum</title>
   <link rel="stylesheet" href="./styles/classic.css" />
@@ -19,10 +19,10 @@
         <span id="mini-title" class="mini-title">Exum — Sin canción</span>
       </div>
       <div class="mini-controls">
-        <button id="mini-prev" class="mini-btn" title="Anterior">⏮</button>
-        <button id="mini-play" class="mini-btn" title="Play / Pause">⏯</button>
-        <button id="mini-next" class="mini-btn" title="Siguiente">⏭</button>
-        <button id="mini-restore" class="mini-btn" title="Restaurar tamaño">⤢</button>
+        <button id="mini-prev" class="mini-btn" title="Anterior">|&lt;</button>
+        <button id="mini-play" class="mini-btn" title="Play / Pause">&gt;</button>
+        <button id="mini-next" class="mini-btn" title="Siguiente">&gt;|</button>
+        <button id="mini-restore" class="mini-btn" title="Restaurar tamaño">[]</button>
       </div>
     </section>
 
@@ -119,12 +119,12 @@
         </div>
 
         <!-- Transporte -->
-        <button id="wsz-btn-prev" class="wsz-cbtn" title="Anterior">⏮</button>
-        <button id="wsz-btn-play" class="wsz-cbtn" title="Play">▶</button>
-        <button id="wsz-btn-pause" class="wsz-cbtn" title="Pause">⏸</button>
-        <button id="wsz-btn-stop" class="wsz-cbtn" title="Stop">⏹</button>
-        <button id="wsz-btn-next" class="wsz-cbtn" title="Siguiente">⏭</button>
-        <button id="wsz-btn-eject" class="wsz-cbtn" title="Agregar archivos">⏏</button>
+        <button id="wsz-btn-prev" class="wsz-cbtn" title="Anterior">|&lt;</button>
+        <button id="wsz-btn-play" class="wsz-cbtn" title="Play">&gt;</button>
+        <button id="wsz-btn-pause" class="wsz-cbtn" title="Pause">||</button>
+        <button id="wsz-btn-stop" class="wsz-cbtn" title="Stop">■</button>
+        <button id="wsz-btn-next" class="wsz-cbtn" title="Siguiente">&gt;|</button>
+        <button id="wsz-btn-eject" class="wsz-cbtn" title="Agregar archivos">^</button>
 
         <button id="wsz-btn-shuffle" class="wsz-shufrep-btn" title="Aleatorio">SHUF</button>
         <button id="wsz-btn-repeat" class="wsz-shufrep-btn" title="Repetir">REP</button>
@@ -215,12 +215,12 @@
           <div id="pl-total-time" class="pl-total-time">00:00/00:00</div>
 
           <div class="pl-mini-transport">
-            <button id="pl-mini-prev" class="pl-mini-btn" title="Anterior">⏮</button>
-            <button id="pl-mini-play" class="pl-mini-btn" title="Play">▶</button>
-            <button id="pl-mini-pause" class="pl-mini-btn" title="Pause">⏸</button>
-            <button id="pl-mini-stop" class="pl-mini-btn" title="Stop">⏹</button>
-            <button id="pl-mini-next" class="pl-mini-btn" title="Siguiente">⏭</button>
-            <button id="pl-mini-eject" class="pl-mini-btn" title="Abrir archivos">⏏</button>
+            <button id="pl-mini-prev" class="pl-mini-btn" title="Anterior">|&lt;</button>
+            <button id="pl-mini-play" class="pl-mini-btn" title="Play">&gt;</button>
+            <button id="pl-mini-pause" class="pl-mini-btn" title="Pause">||</button>
+            <button id="pl-mini-stop" class="pl-mini-btn" title="Stop">■</button>
+            <button id="pl-mini-next" class="pl-mini-btn" title="Siguiente">&gt;|</button>
+            <button id="pl-mini-eject" class="pl-mini-btn" title="Abrir archivos">^</button>
           </div>
 
           <button id="pl-btn-list" class="pl-sprite-btn" title="Playlists guardadas y .m3u">LIST</button>
